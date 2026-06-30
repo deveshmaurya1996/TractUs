@@ -54,6 +54,7 @@ cp apps/web/.env.example apps/web/.env.local
 | `LOG_LEVEL` | API | Pino log level (default `info`) |
 | `API_PUBLIC_URL` | API | Public API origin for OpenAPI/Swagger (optional; Docker sets from `NEXT_PUBLIC_SOCKET_URL`) |
 | `TRUST_PROXY` | API | Set to `true` behind Nginx/Caddy when not using `NODE_ENV=production` |
+| `DOMAIN` | Caddy | Public hostname (e.g. `tractus-you.duckdns.org`) when using domain compose |
 | `NEXT_PUBLIC_API_URL` | Web | Frontend API base URL |
 | `NEXT_PUBLIC_SOCKET_URL` | Web | Socket.io server URL |
 
@@ -161,12 +162,13 @@ Interactive Swagger UI and machine-readable OpenAPI spec (no API keys — use `o
 - Swagger UI: http://localhost:3001/api/docs
 - OpenAPI JSON: http://localhost:3001/api/openapi.json
 
-**Production** (replace with your public API host):
+**Production** (single DuckDNS / domain URL):
 
-- Swagger UI: `http://<PUBLIC_IP>:3001/api/docs`
-- OpenAPI JSON: `http://<PUBLIC_IP>:3001/api/openapi.json`
+- App: `https://<DOMAIN>`
+- Swagger UI: `https://<DOMAIN>/api/docs`
+- OpenAPI JSON: `https://<DOMAIN>/api/openapi.json`
 
-The spec’s `servers` URL is set from `API_PUBLIC_URL` (or `NEXT_PUBLIC_SOCKET_URL` in Docker Compose prod). Behind HTTPS reverse proxy, set `API_PUBLIC_URL=https://your-domain.com` and enable proxy trust (`NODE_ENV=production` or `TRUST_PROXY=true`).
+The spec’s `servers` URL is set from `API_PUBLIC_URL` (or `NEXT_PUBLIC_SOCKET_URL` in Docker Compose prod). Behind Caddy, set all three env vars to `https://<DOMAIN>` (see `.env.production.example`).
 
 ## Tests
 
@@ -197,19 +199,31 @@ pnpm db:seed:force
 
 ### Oracle Cloud (OCI) — recommended
 
-Deploy the **full stack on one Always Free ARM VM** with Docker Compose (PostgreSQL + API + Web).
+Deploy the **full stack on one Always Free ARM VM** with Docker Compose (PostgreSQL + API + Web + Caddy).
 
-**Prerequisites:** OCI account, Always Free Ampere A1 VM (Ubuntu 22.04/24.04), public IP.
+**Prerequisites:** OCI account, Always Free Ampere A1 VM (Ubuntu 22.04/24.04), public IP, free [DuckDNS](https://www.duckdns.org) subdomain.
+
+#### One URL for everything (recommended for assignments)
+
+Frontend, API, Socket.io, and Swagger share the same hostname:
+
+| What | URL |
+|------|-----|
+| App | `https://tractus-you.duckdns.org` |
+| API | `https://tractus-you.duckdns.org/api/...` |
+| Swagger UI | `https://tractus-you.duckdns.org/api/docs` |
 
 1. **Create a VM** (OCI Console → Compute → Instances → Ampere A1 shape is fine).
 
-2. **Open ingress ports** (VCN security list or NSG):
-   - `22` — SSH
-   - `3000` — Web UI
-   - `3001` — API + Socket.io  
-   Do **not** expose Postgres (`5433`) to the internet.
+2. **Get a free subdomain** at [duckdns.org](https://www.duckdns.org) (e.g. `tractus-you`) and point it at your VM **public IP**.
 
-3. **SSH into the VM** and install Docker:
+3. **Open ingress ports** (VCN security list or NSG):
+   - `22` — SSH
+   - `80` — HTTP (Let's Encrypt)
+   - `443` — HTTPS  
+   Do **not** expose Postgres (`5433`) or app ports `3000`/`3001` (Caddy handles public traffic).
+
+4. **SSH into the VM** and install Docker:
 
    ```bash
    sudo apt update && sudo apt install -y git docker.io docker-compose-v2
@@ -217,7 +231,7 @@ Deploy the **full stack on one Always Free ARM VM** with Docker Compose (Postgre
    # log out and back in
    ```
 
-4. **Clone and configure:**
+5. **Clone and configure:**
 
    ```bash
    git clone <your-repo-url> Tract-Us
@@ -225,48 +239,69 @@ Deploy the **full stack on one Always Free ARM VM** with Docker Compose (Postgre
    cp .env.production.example .env
    ```
 
-   Edit `.env` — replace `YOUR_PUBLIC_IP` with the VM public IP:
+   Edit `.env` — replace `tractus-you` with your DuckDNS name (all four values must match):
 
    ```env
-   NEXT_PUBLIC_API_URL=http://203.0.113.10:3001/api
-   NEXT_PUBLIC_SOCKET_URL=http://203.0.113.10:3001
+   DOMAIN=tractus-you.duckdns.org
+   NEXT_PUBLIC_API_URL=https://tractus-you.duckdns.org/api
+   NEXT_PUBLIC_SOCKET_URL=https://tractus-you.duckdns.org
+   API_PUBLIC_URL=https://tractus-you.duckdns.org
    ```
 
-5. **Build and start:**
+6. **Build and start** (includes Caddy for HTTPS):
 
    ```bash
-   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml up --build -d
    ```
 
-   First start runs `db:push` and `db:seed` automatically (seed only if the DB is empty/partial).
+   First start runs `db:push` and `db:seed` automatically (seed only if the DB is empty/partial). Caddy requests a Let's Encrypt certificate on first visit (may take a minute).
 
-6. **Verify:** open `http://<PUBLIC_IP>:3000`, select **Acme Corp** or **Globex Inc**. API docs: `http://<PUBLIC_IP>:3001/api/docs`.
+7. **Verify:** open `https://tractus-you.duckdns.org`, select **Acme Corp** or **Globex Inc**. Swagger: `https://tractus-you.duckdns.org/api/docs`.
 
-7. **Add to this README:**
+8. **Add to this README:**
 
    ```markdown
-   **Deployed URL:** http://<PUBLIC_IP>:3000
+   **Deployed URL:** https://tractus-you.duckdns.org
+   **Swagger UI:** https://tractus-you.duckdns.org/api/docs
    ```
 
 **Useful commands on the VM:**
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f api
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-pnpm db:seed:force   # only inside api container if you need to reset demo data
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml logs -f caddy
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml logs -f api
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml ps
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml exec api pnpm db:seed:force
 ```
+
+#### IP-only fallback (no DuckDNS)
+
+Open ports `22`, `3000`, `3001` on OCI. In `.env`:
+
+```env
+NEXT_PUBLIC_API_URL=http://YOUR_PUBLIC_IP:3001/api
+NEXT_PUBLIC_SOCKET_URL=http://YOUR_PUBLIC_IP:3001
+```
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+```
+
+- App: `http://<PUBLIC_IP>:3000`
+- Swagger: `http://<PUBLIC_IP>:3001/api/docs`
 
 **Notes:**
 - Uses **PostgreSQL in Docker**, not Oracle Database — no Prisma changes needed.
 - PDF uploads persist in the `uploads_data` Docker volume.
-- For HTTPS, add Nginx/Caddy + a domain later; HTTP + IP is fine for assignment review.
 - Set an OCI **billing alert** and **stop/delete** the VM when finished to stay on free tier.
 
 ### Other clouds (AWS / Azure / GCP)
 
-Same pattern: small VM + Docker Compose, or split API (VM/container) + managed Postgres. Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SOCKET_URL` to your public API URL at **web build time**.
+Same pattern: small VM + Docker Compose (+ `docker-compose.domain.yml` for a single HTTPS URL), or split API (VM/container) + managed Postgres. Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SOCKET_URL` to your public API URL at **web build time**.
 
-**Deployed URL:** _Add your Oracle OCI URL here after deployment (e.g. http://YOUR_PUBLIC_IP:3000)_
+**Deployed URL:** https://tractus-devesh.duckdns.org
+
+**Swagger UI:** https://tractus-devesh.duckdns.org/api/docs
 
 **Evaluation access:** No login required — select an organization from the dropdown to begin.
 
