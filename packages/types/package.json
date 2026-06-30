@@ -1,0 +1,17 @@
+{
+  "name": "@tractus/types",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint src --max-warnings 0",
+    "build": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@tractus/eslint-config": "workspace:*",
+    "@tractus/tsconfig": "workspace:*",
+    "eslint": "^8.57.0",
+    "typescript": "^5.3.3"
+  }
+}

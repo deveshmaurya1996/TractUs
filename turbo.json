@@ -1,0 +1,17 @@
+﻿{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_SOCKET_URL", "DATABASE_URL", "PORT", "LOG_LEVEL", "NODE_ENV"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

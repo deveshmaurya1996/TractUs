@@ -1,0 +1,32 @@
+{
+  "name": "tractus",
+  "private": true,
+  "scripts": {
+    "build": "pnpm --filter @tractus/api --filter @tractus/web run build",
+    "dev": "pnpm --filter @tractus/api --filter @tractus/web --parallel run dev",
+    "lint": "pnpm -r --if-present run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "db:generate": "pnpm --filter @tractus/api db:generate",
+    "db:push": "pnpm --filter @tractus/api db:push",
+    "db:seed": "pnpm --filter @tractus/api db:seed",
+    "db:seed:force": "pnpm --filter @tractus/api db:seed:force"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.18.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "sharp"
+    ]
+  }
+}
