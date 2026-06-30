@@ -9,6 +9,7 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile \
   && pnpm db:generate \
+  && pnpm --filter @tractus/validation build \
   && pnpm --filter @tractus/api build
 
 RUN mkdir -p /app/apps/api/uploads \
