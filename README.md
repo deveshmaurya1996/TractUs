@@ -285,6 +285,36 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml exec api pnpm db:seed:force
 ```
 
+#### Auto-deploy on push to `master`
+
+After CI passes, GitHub Actions SSHs into the VM, runs `git pull`, and rebuilds Docker (`/.github/workflows/deploy.yml`).
+
+**One-time setup** — add these [repository secrets](https://github.com/deveshmaurya1996/TractUs/settings/secrets/actions):
+
+| Secret | Value |
+|--------|-------|
+| `OCI_HOST` | `161.118.180.183` |
+| `OCI_USER` | `ubuntu` |
+| `OCI_SSH_PRIVATE_KEY` | Contents of your `ssh-key-2026-06-25.key` file |
+
+From your machine (with [GitHub CLI](https://cli.github.com/) logged in):
+
+```bash
+gh secret set OCI_HOST --body "161.118.180.183" --repo deveshmaurya1996/TractUs
+gh secret set OCI_USER --body "ubuntu" --repo deveshmaurya1996/TractUs
+gh secret set OCI_SSH_PRIVATE_KEY --repo deveshmaurya1996/TractUs < "C:\Users\deves\Downloads\ssh-key-2026-06-25.key"
+```
+
+**Flow:** push to `master` → CI runs tests/lint/build → if green, Deploy workflow runs → production updates at https://tractus-devesh.duckdns.org
+
+Rebuilds on the 1 GB VM can take **30–90 minutes**. You can also trigger a deploy manually: GitHub → **Actions** → **Deploy** → **Run workflow**.
+
+**Manual redeploy on the VM** (without GitHub Actions):
+
+```bash
+bash scripts/redeploy-vm.sh
+```
+
 #### IP-only fallback (no DuckDNS)
 
 Open ports `22`, `3000`, `3001` on OCI. In `.env`:

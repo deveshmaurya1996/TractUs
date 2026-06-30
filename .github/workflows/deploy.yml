@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Deploy to Oracle VM
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          command_timeout: 110m
+          script: |
+            set -euo pipefail
+            cd ~/Tract-Us
+            git fetch origin master
+            git checkout master
+            git pull --ff-only origin master
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml up --build -d
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml ps
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          script: |
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              if curl -fsS https://tractus-devesh.duckdns.org/api/health | grep -q '"status":"ok"'; then
+                echo "Health check passed"
+                exit 0
+              fi
+              echo "Waiting for API... ($i/10)"
+              sleep 15
+            done
+            echo "Health check failed"
+            exit 1
