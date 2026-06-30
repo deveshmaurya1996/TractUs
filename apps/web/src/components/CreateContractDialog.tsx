@@ -20,6 +20,8 @@ import CloseIcon from "@mui/icons-material/Close";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import CodeOutlinedIcon from "@mui/icons-material/CodeOutlined";
 import EditNoteOutlinedIcon from "@mui/icons-material/EditNoteOutlined";
+import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
+import ClearIcon from "@mui/icons-material/Clear";
 import { ZodError } from "zod";
 import { ContractFieldDataSchema, formatZodErrors } from "@tractus/validation";
 import type { ContractFieldData } from "@tractus/types";
@@ -46,11 +48,12 @@ const SAMPLE_JSON = `{
 interface CreateContractDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (fieldData: ContractFieldData) => void;
+  onSubmit: (fieldData: ContractFieldData, pdfFile?: File | null) => void;
+  onManualCreate: (pdfFile?: File | null) => void;
   isPending: boolean;
   formControl: React.ComponentProps<typeof ContractFieldForm>["control"];
   formErrors: React.ComponentProps<typeof ContractFieldForm>["errors"];
-  onFormSubmit: (e?: React.BaseSyntheticEvent) => Promise<void>;
+  formSetValue: React.ComponentProps<typeof ContractFieldForm>["setValue"];
   onResetForm: (data: { fieldData: ContractFieldData }) => void;
   emptyFieldData: ContractFieldData;
 }
@@ -59,16 +62,19 @@ export function CreateContractDialog({
   open,
   onClose,
   onSubmit,
+  onManualCreate,
   isPending,
   formControl,
   formErrors,
-  onFormSubmit,
+  formSetValue,
   onResetForm,
   emptyFieldData,
 }: CreateContractDialogProps) {
   const [tab, setTab] = useState(0);
   const [jsonInput, setJsonInput] = useState(SAMPLE_JSON);
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const parseJson = (raw: string): ContractFieldData | null => {
     try {
@@ -112,13 +118,30 @@ export function CreateContractDialog({
   const handleCreateFromJson = () => {
     const validated = parseJson(jsonInput);
     if (validated) {
-      onSubmit(validated);
+      onSubmit(validated, pdfFile);
     }
+  };
+
+  const handlePdfSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      setPdfError("Only PDF files are allowed");
+      setPdfFile(null);
+      return;
+    }
+
+    setPdfError(null);
+    setPdfFile(file);
   };
 
   const handleClose = () => {
     setTab(0);
     setJsonError(null);
+    setPdfError(null);
+    setPdfFile(null);
     setJsonInput(SAMPLE_JSON);
     onResetForm({ fieldData: emptyFieldData });
     onClose();
@@ -137,7 +160,7 @@ export function CreateContractDialog({
           New Contract
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Enter details manually or paste contract JSON
+          Enter details manually or paste contract JSON. You can optionally attach a PDF.
         </Typography>
         <IconButton
           onClick={handleClose}
@@ -160,8 +183,19 @@ export function CreateContractDialog({
 
       <DialogContent sx={{ pt: 3 }}>
         {tab === 0 ? (
-          <Box component="form" id="create-contract-form" onSubmit={onFormSubmit}>
-            <ContractFieldForm control={formControl} errors={formErrors} />
+          <Box
+            component="form"
+            id="create-contract-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onManualCreate(pdfFile);
+            }}
+          >
+            <ContractFieldForm
+              control={formControl}
+              errors={formErrors}
+              setValue={formSetValue}
+            />
           </Box>
         ) : (
           <Stack spacing={2}>
@@ -214,6 +248,54 @@ export function CreateContractDialog({
             {jsonError && <Alert severity="error">{jsonError}</Alert>}
           </Stack>
         )}
+
+        <Divider sx={{ my: 2.5 }} />
+
+        <Stack spacing={1.5}>
+          <Typography variant="subtitle2" fontWeight={600}>
+            PDF Attachment (optional)
+          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Button
+              variant="outlined"
+              size="small"
+              component="label"
+              startIcon={<PictureAsPdfOutlinedIcon />}
+              disabled={isPending}
+            >
+              {pdfFile ? "Replace PDF" : "Choose PDF"}
+              <input
+                type="file"
+                accept="application/pdf"
+                hidden
+                onChange={handlePdfSelect}
+              />
+            </Button>
+            {pdfFile && (
+              <>
+                <Typography variant="body2" color="text.secondary">
+                  {pdfFile.name} ({(pdfFile.size / 1024).toFixed(1)} KB)
+                </Typography>
+                <IconButton
+                  size="small"
+                  aria-label="Remove PDF"
+                  onClick={() => {
+                    setPdfFile(null);
+                    setPdfError(null);
+                  }}
+                  disabled={isPending}
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </>
+            )}
+          </Stack>
+          {pdfError && (
+            <Typography variant="caption" color="error">
+              {pdfError}
+            </Typography>
+          )}
+        </Stack>
       </DialogContent>
 
       <Divider />
@@ -224,10 +306,9 @@ export function CreateContractDialog({
         </Button>
         {tab === 0 ? (
           <Button
-            type="submit"
-            form="create-contract-form"
             variant="contained"
             disabled={isPending}
+            onClick={() => onManualCreate(pdfFile)}
           >
             Create Contract
           </Button>

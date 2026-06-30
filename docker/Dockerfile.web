@@ -1,0 +1,21 @@
+FROM node:20-alpine
+WORKDIR /app
+
+RUN apk add --no-cache libc6-compat \
+  && corepack enable \
+  && corepack prepare pnpm@10.18.0 --activate
+
+ARG NEXT_PUBLIC_API_URL=http://localhost:3001/api
+ARG NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+
+COPY . .
+
+RUN pnpm install --frozen-lockfile \
+  && pnpm --filter @tractus/web build
+
+ENV NODE_ENV=production
+EXPOSE 3000
+
+CMD ["pnpm", "--filter", "@tractus/web", "start"]

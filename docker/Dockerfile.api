@@ -1,0 +1,20 @@
+FROM node:20-alpine
+WORKDIR /app
+
+RUN apk add --no-cache openssl libc6-compat \
+  && corepack enable \
+  && corepack prepare pnpm@10.18.0 --activate
+
+COPY . .
+
+RUN pnpm install --frozen-lockfile \
+  && pnpm db:generate \
+  && pnpm --filter @tractus/api build
+
+RUN mkdir -p /app/apps/api/uploads \
+  && chmod +x /app/docker/api-entrypoint.sh
+
+ENV NODE_ENV=production
+EXPOSE 3001
+
+ENTRYPOINT ["/app/docker/api-entrypoint.sh"]

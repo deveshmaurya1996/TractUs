@@ -135,6 +135,10 @@ export const theme = createTheme({
 
 export const dataGridSx = {
   border: "none",
+  width: "100%",
+  "& .MuiDataGrid-main": {
+    width: "100%",
+  },
   "& .MuiDataGrid-columnHeaders": {
     backgroundColor: "#f8fafc",
     borderBottom: "1px solid #e2e8f0",
@@ -159,12 +163,16 @@ export const dataGridSx = {
     display: "flex",
     alignItems: "center",
     py: 1,
+    overflow: "hidden",
+  },
+  "& .MuiDataGrid-cell[data-field='actions']": {
     overflow: "visible",
+    justifyContent: "flex-end",
   },
   "& .MuiDataGrid-cellContent": {
-    overflow: "visible",
-    textOverflow: "clip",
-    whiteSpace: "normal",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
     lineHeight: 1.4,
     width: "100%",
     minWidth: 0,

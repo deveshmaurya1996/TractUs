@@ -6,5 +6,6 @@ export {
   useDeleteContract,
   useUpdateContract,
   useUpdateContractStatus,
+  useUploadContractPdf,
 } from "./use-contract-mutations";
 export { useContractsSocket, useContractSocket } from "./use-contract-socket";

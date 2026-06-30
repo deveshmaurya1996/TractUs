@@ -34,6 +34,8 @@ export interface Contract {
   fieldData: ContractFieldData;
   status: ContractStatus;
   deletedAt?: Date | null;
+  pdfFileName?: string | null;
+  pdfSize?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

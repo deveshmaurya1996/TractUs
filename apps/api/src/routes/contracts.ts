@@ -15,7 +15,9 @@ import type {
   PaginatedResponse,
   ContractStatus,
 } from "@tractus/types";
-import { io } from "../index";
+import { emitContractEvent } from "../lib/socket";
+import { pdfPath, pdfUpload } from "../lib/uploads";
+import fs from "fs";
 import {
   findContractForOrg,
   notDeleted,
@@ -140,7 +142,7 @@ router.post("/", async (req, res) => {
         metadata: { contract },
       },
     });
-    io.emit("contract.created", contract);
+    emitContractEvent("contract.created", contract);
     const response: ApiResponse<Contract> = {
       success: true,
       data: toContract(contract),
@@ -184,7 +186,7 @@ router.patch("/:id", async (req, res) => {
         metadata: { contract },
       },
     });
-    io.emit("contract.updated", contract);
+    emitContractEvent("contract.updated", contract);
     const response: ApiResponse<Contract> = {
       success: true,
       data: toContract(contract),
@@ -224,7 +226,7 @@ router.patch("/:id/status", async (req, res) => {
         metadata: { oldStatus: existingContract.status, newStatus: status },
       },
     });
-    io.emit("contract.status.changed", contract);
+    emitContractEvent("contract.status.changed", contract);
     const response: ApiResponse<Contract> = {
       success: true,
       data: toContract(contract),
@@ -251,6 +253,10 @@ router.delete("/:id", async (req, res) => {
         .status(409)
         .json({ success: false, message: "Only draft contracts can be deleted" });
     }
+    const pdfFile = pdfPath(organizationId, id);
+    if (fs.existsSync(pdfFile)) {
+      fs.unlinkSync(pdfFile);
+    }
     await prisma.auditEvent.create({
       data: {
         contractId: id,
@@ -262,7 +268,7 @@ router.delete("/:id", async (req, res) => {
       where: { id },
       data: { deletedAt: new Date() },
     });
-    io.emit("contract.deleted", { id });
+    emitContractEvent("contract.deleted", { id });
     const response: ApiResponse = {
       success: true,
       message: "Contract deleted",
@@ -270,6 +276,83 @@ router.delete("/:id", async (req, res) => {
     res.json(response);
   } catch (error) {
     return handleRouteError(req, res, error, "Failed to delete contract");
+  }
+});
+
+router.get("/:id/pdf", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = parseOrganizationId(req);
+    const existing = await findContractForOrg(id, organizationId);
+    if (!existing?.pdfFileName) {
+      return res.status(404).json({ success: false, message: "PDF not found" });
+    }
+    const filePath = pdfPath(organizationId, id);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: "PDF not found" });
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${existing.pdfFileName}"`
+    );
+    fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    return handleRouteError(req, res, error, "Failed to download PDF");
+  }
+});
+
+router.post("/:id/pdf", pdfUpload.single("pdf"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = parseOrganizationId(req);
+    const existing = await findContractForOrg(id, organizationId);
+    if (!existing) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Contract not found" });
+    }
+    if (existing.status !== "DRAFT") {
+      return res.status(409).json({
+        success: false,
+        message: "Only draft contracts can receive PDF uploads",
+      });
+    }
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ success: false, message: "PDF file is required" });
+    }
+
+    const contract = await prisma.contract.update({
+      where: { id },
+      data: {
+        pdfFileName: req.file.originalname,
+        pdfSize: req.file.size,
+      },
+    });
+    await prisma.auditEvent.create({
+      data: {
+        contractId: id,
+        eventType: "contract.pdf.uploaded",
+        metadata: {
+          fileName: req.file.originalname,
+          size: req.file.size,
+        },
+      },
+    });
+    emitContractEvent("contract.updated", contract);
+    const response: ApiResponse<Contract> = {
+      success: true,
+      data: toContract(contract),
+      message: "PDF uploaded successfully",
+    };
+    res.json(response);
+  } catch (error) {
+    if (error instanceof Error && error.message === "Only PDF files are allowed") {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return handleRouteError(req, res, error, "Failed to upload PDF");
   }
 });
 

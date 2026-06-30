@@ -5,24 +5,50 @@ import {
   deleteContract,
   updateContract,
   updateContractStatus,
+  uploadContractPdf,
 } from "../lib/contracts-api";
 
 interface MutationCallbacks {
   onSuccess?: () => void;
-  onError?: () => void;
+  onError?: (error: unknown) => void;
 }
 
 export function useCreateContract(callbacks?: MutationCallbacks) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: createContract,
+    mutationFn: async (vars: {
+      organizationId: string;
+      fieldData: ContractFieldData;
+      pdfFile?: File;
+    }) => {
+      const result = await createContract(vars);
+      if (!result.success || !result.data) {
+        throw new Error(result.message || "Failed to create contract");
+      }
+
+      if (vars.pdfFile) {
+        const pdfResult = await uploadContractPdf(
+          result.data.id,
+          vars.organizationId,
+          vars.pdfFile
+        );
+        if (!pdfResult.success) {
+          throw new Error(
+            pdfResult.message || "Contract created but PDF upload failed"
+          );
+        }
+        return pdfResult;
+      }
+
+      return result;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       callbacks?.onSuccess?.();
     },
-    onError: () => {
-      callbacks?.onError?.();
+    onError: (error) => {
+      callbacks?.onError?.(error);
     },
   });
 }
@@ -37,8 +63,8 @@ export function useDeleteContract(callbacks?: MutationCallbacks) {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       callbacks?.onSuccess?.();
     },
-    onError: () => {
-      callbacks?.onError?.();
+    onError: (error) => {
+      callbacks?.onError?.(error);
     },
   });
 }
@@ -66,8 +92,8 @@ export function useUpdateContractStatus(callbacks?: MutationCallbacks) {
       });
       callbacks?.onSuccess?.();
     },
-    onError: () => {
-      callbacks?.onError?.();
+    onError: (error) => {
+      callbacks?.onError?.(error);
     },
   });
 }
@@ -92,8 +118,33 @@ export function useUpdateContract(
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
       callbacks?.onSuccess?.();
     },
-    onError: () => {
-      callbacks?.onError?.();
+    onError: (error) => {
+      callbacks?.onError?.(error);
+    },
+  });
+}
+
+export function useUploadContractPdf(
+  id: string,
+  organizationId: string | undefined,
+  callbacks?: MutationCallbacks
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (file: File) => {
+      if (!organizationId) {
+        throw new Error("Organization is required");
+      }
+      return uploadContractPdf(id, organizationId, file);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contract", id] });
+      queryClient.invalidateQueries({ queryKey: ["events", id] });
+      callbacks?.onSuccess?.();
+    },
+    onError: (error) => {
+      callbacks?.onError?.(error);
     },
   });
 }

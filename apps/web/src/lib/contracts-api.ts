@@ -89,3 +89,21 @@ export function fetchAuditEvents(
     (res) => res.json()
   );
 }
+
+export function getContractPdfUrl(id: string, organizationId: string): string {
+  return `${API_BASE_URL}/contracts/${id}/pdf?${orgQuery(organizationId)}`;
+}
+
+export async function uploadContractPdf(
+  id: string,
+  organizationId: string,
+  file: File
+): Promise<ApiResponse<Contract>> {
+  const formData = new FormData();
+  formData.append("pdf", file);
+  const res = await fetch(
+    `${API_BASE_URL}/contracts/${id}/pdf?${orgQuery(organizationId)}`,
+    { method: "POST", body: formData }
+  );
+  return res.json();
+}

@@ -12,7 +12,9 @@ A full-stack contract management application built for the Full-Stack Engineerin
 - **Pagination** — server-side pagination on the contract list
 - **Audit trail** — full event history per contract (create, update, status change, delete)
 - **Real-time updates** — Socket.io broadcasts status changes across browser tabs
-- **Docker Compose** — local PostgreSQL via `docker-compose.yml`
+- **PDF attachments** — upload and view PDF on draft contracts
+- **API tests** — Vitest + Supertest integration tests
+- **Docker Compose** — full stack (PostgreSQL + API + Web) with `docker compose up`
 
 ## Tech Stack
 
@@ -63,6 +65,20 @@ You do **not** need separate env files in `apps/api` or `apps/web` unless you wa
 
 ## Local Development
 
+### Option A — Docker (full stack)
+
+```bash
+docker compose up --build
+```
+
+- Frontend: http://localhost:3000
+- API: http://localhost:3001
+- PostgreSQL: localhost:5433 (host) / `postgres:5432` (internal)
+
+Stop with `docker compose down`.
+
+### Option B — Native (pnpm)
+
 1. **Start PostgreSQL**
    ```bash
    docker-compose up -d
@@ -105,9 +121,16 @@ To **reset and reseed** (clears all data first):
 pnpm db:seed:force
 ```
 
+`pnpm db:seed` skips only when **contracts already exist**. If the DB is empty (e.g. after `pnpm test`, which wipes data), a normal `pnpm db:seed` will populate it — you do not need `--force` unless you want to replace existing contracts.
+
+**If the UI looks empty after seeding:**
+1. Confirm Postgres is running and `DATABASE_URL` in `apps/api/.env` points to `localhost:5433` (same DB you seeded).
+2. Refresh the app — org IDs change after reseed; stale `sessionStorage` can point at old organizations.
+3. Run `pnpm db:seed` again (or `pnpm db:seed:force` to fully reset).
+
 Seeds:
-- **2 organizations**: Acme Corp, Globex Inc
-- **5 contracts** across DRAFT, FINALIZED, and ARCHIVED statuses
+- **2 organizations**: Acme Corp (6 contracts), Globex Inc (6 contracts)
+- **12 contracts** across DRAFT, FINALIZED, and ARCHIVED statuses
 - **Audit events** for each contract (create + status changes)
 
 ## API Endpoints
@@ -123,6 +146,17 @@ Seeds:
 - `PATCH /api/contracts/:id/status` — transition status
 - `DELETE /api/contracts/:id` — soft-delete draft contract
 - `GET /api/contracts/:id/events` — audit trail
+- `POST /api/contracts/:id/pdf` — upload PDF (draft only, multipart field `pdf`)
+- `GET /api/contracts/:id/pdf` — download/view PDF
+
+## Tests
+
+Requires PostgreSQL running (same `DATABASE_URL` as dev):
+
+```bash
+pnpm db:push
+pnpm test
+```
 
 ## Status Workflow
 

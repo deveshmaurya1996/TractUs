@@ -30,7 +30,7 @@ import { StatusChip, EmptyState, LoadingOverlay, ConfirmDialog } from "@tractus/
 import { formatDate, getNextStatus } from "@tractus/utils";
 import { useOrganization } from "./providers";
 import type { Contract } from "@tractus/types";
-import { ContractFieldDataSchema } from "@tractus/validation";
+import { calculateItemTotal, ContractFieldDataSchema } from "@tractus/validation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -54,7 +54,7 @@ const emptyFieldData: ContractFieldData = {
   client_name: "",
   po_ref_no: "",
   po_date: "",
-  items: [{ description: "", quantity: 1, unit_price: 0 }],
+  items: [{ description: "", quantity: 1, unit_price: 0, total: calculateItemTotal(1, 0) }],
 };
 
 export default function Home() {
@@ -103,7 +103,11 @@ export default function Home() {
       reset({ fieldData: emptyFieldData });
       showSnackbar("Contract created successfully!", "success");
     },
-    onError: () => showSnackbar("Failed to create contract", "error"),
+    onError: (error) => {
+      const message =
+        error instanceof Error ? error.message : "Failed to create contract";
+      showSnackbar(message, "error");
+    },
   });
 
   const deleteMutation = useDeleteContract({
@@ -119,87 +123,108 @@ export default function Home() {
     onError: () => showSnackbar("Failed to update status", "error"),
   });
 
-  const { control, handleSubmit, reset, formState: { errors } } = useForm<{
+  const { control, handleSubmit, reset, setValue, formState: { errors } } = useForm<{
     fieldData: ContractFieldData;
   }>({
     resolver: zodResolver(z.object({ fieldData: ContractFieldDataSchema })),
     defaultValues: { fieldData: emptyFieldData },
   });
 
-  const onSubmit = (data: { fieldData: ContractFieldData }) => {
-    if (selectedOrganization) {
-      createMutation.mutate({
-        organizationId: selectedOrganization.id,
-        fieldData: data.fieldData,
-      });
-    }
-  };
-
-  const handleCreateFromJson = (fieldData: ContractFieldData) => {
+  const handleCreate = (fieldData: ContractFieldData, pdfFile?: File | null) => {
     if (selectedOrganization) {
       createMutation.mutate({
         organizationId: selectedOrganization.id,
         fieldData,
+        pdfFile: pdfFile ?? undefined,
       });
     }
   };
 
+  const submitCreateForm = (pdfFile?: File | null) => {
+    handleSubmit((data) => handleCreate(data.fieldData, pdfFile))();
+  };
+
+  const handleCreateFromJson = (fieldData: ContractFieldData, pdfFile?: File | null) => {
+    handleCreate(fieldData, pdfFile);
+  };
+
   const stopRowClick = (e: React.MouseEvent) => e.stopPropagation();
+
+  const ellipsisCell = (
+    value: string,
+    options?: { fontWeight?: number; monospace?: boolean }
+  ) => (
+    <Typography
+      variant="body2"
+      fontWeight={options?.fontWeight}
+      color="text.primary"
+      sx={{
+        fontFamily: options?.monospace ? "monospace" : undefined,
+        fontSize: options?.monospace ? "0.75rem" : undefined,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        width: "100%",
+        minWidth: 0,
+      }}
+      title={value}
+    >
+      {value}
+    </Typography>
+  );
 
   const columns: GridColDef<Contract>[] = [
     {
       field: "clientName",
       headerName: "Client Name",
       flex: 1.2,
-      minWidth: 160,
-      renderCell: (params) => (
-        <Typography
-          variant="body2"
-          fontWeight={600}
-          color="text.primary"
-          sx={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            width: "100%",
-          }}
-          title={params.row.clientName}
-        >
-          {params.row.clientName}
-        </Typography>
-      ),
+      minWidth: 120,
+      renderCell: (params) => ellipsisCell(params.row.clientName, { fontWeight: 600 }),
     },
-    { field: "poRefNo", headerName: "PO Ref", width: 120 },
+    {
+      field: "poRefNo",
+      headerName: "PO Ref",
+      flex: 1,
+      minWidth: 100,
+      renderCell: (params) => ellipsisCell(params.row.poRefNo),
+    },
+    {
+      field: "poDate",
+      headerName: "PO Date",
+      flex: 0.8,
+      minWidth: 100,
+      valueFormatter: (value) => formatDate(new Date(value)),
+    },
     {
       field: "id",
       headerName: "Contract ID",
-      flex: 1,
-      minWidth: 200,
-      renderCell: (params) => (
-        <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-          {params.row.id}
-        </Typography>
-      ),
+      flex: 1.2,
+      minWidth: 140,
+      renderCell: (params) => ellipsisCell(params.row.id, { monospace: true }),
     },
-    { field: "poDate", headerName: "PO Date", width: 120 },
     {
       field: "status",
       headerName: "Status",
-      width: 130,
+      flex: 0.9,
+      minWidth: 110,
       renderCell: (params) => <StatusChip status={params.row.status} />,
     },
     {
       field: "createdAt",
       headerName: "Created",
-      width: 130,
-      valueGetter: (value) => formatDate(new Date(value)),
+      flex: 0.8,
+      minWidth: 100,
+      valueFormatter: (value) => formatDate(new Date(value)),
     },
     {
       field: "actions",
       headerName: "Actions",
-      width: 160,
+      width: 200,
+      minWidth: 200,
+      maxWidth: 220,
       sortable: false,
       filterable: false,
+      disableColumnMenu: true,
       align: "right",
       headerAlign: "right",
       renderCell: (params) => {
@@ -211,8 +236,7 @@ export default function Home() {
             spacing={0.5}
             justifyContent="flex-end"
             alignItems="center"
-            width="100%"
-            height="100%"
+            sx={{ flexShrink: 0, width: "100%", height: "100%" }}
             onClick={stopRowClick}
           >
             {params.row.status === "DRAFT" && (
@@ -375,6 +399,7 @@ export default function Home() {
               pageSizeOptions={[10, 25, 50]}
               loading={contractsLoading}
               autoHeight
+              disableColumnResize
               getRowId={(row) => row.id}
               onRowClick={handleRowClick}
               disableRowSelectionOnClick
@@ -396,10 +421,11 @@ export default function Home() {
         open={createDialogOpen}
         onClose={() => setCreateDialogOpen(false)}
         onSubmit={handleCreateFromJson}
+        onManualCreate={submitCreateForm}
         isPending={createMutation.isPending}
         formControl={control}
         formErrors={errors}
-        onFormSubmit={handleSubmit(onSubmit)}
+        formSetValue={setValue}
         onResetForm={reset}
         emptyFieldData={emptyFieldData}
       />

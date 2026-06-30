@@ -28,11 +28,13 @@ import {
 import Grid from "@mui/material/Grid2";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
+import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import { StatusChip, LoadingOverlay } from "@tractus/ui";
 import { formatDateTime, getNextStatus } from "@tractus/utils";
 import type { AuditEvent, ContractFieldData } from "@tractus/types";
-import { ContractFieldDataSchema } from "@tractus/validation";
+import { calculateItemTotal, ContractFieldDataSchema } from "@tractus/validation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -45,14 +47,16 @@ import {
   useAuditEvents,
   useUpdateContract,
   useUpdateContractStatus,
+  useUploadContractPdf,
   useContractSocket,
 } from "../../../hooks";
+import { getContractPdfUrl } from "../../../lib/contracts-api";
 
 const emptyFieldData: ContractFieldData = {
   client_name: "",
   po_ref_no: "",
   po_date: "",
-  items: [{ description: "", quantity: 1, unit_price: 0 }],
+  items: [{ description: "", quantity: 1, unit_price: 0, total: calculateItemTotal(1, 0) }],
 };
 
 const EVENT_LABELS: Record<string, string> = {
@@ -60,6 +64,7 @@ const EVENT_LABELS: Record<string, string> = {
   "contract.updated": "Updated",
   "contract.status.changed": "Status Changed",
   "contract.deleted": "Deleted",
+  "contract.pdf.uploaded": "PDF Uploaded",
 };
 
 export default function ContractDetail() {
@@ -102,10 +107,15 @@ export default function ContractDetail() {
     onError: () => showSnackbar("Failed to update status", "error"),
   });
 
+  const pdfMutation = useUploadContractPdf(id, organizationId, {
+    onSuccess: () => showSnackbar("PDF uploaded successfully!", "success"),
+    onError: () => showSnackbar("Failed to upload PDF", "error"),
+  });
+
   const contract = contractData?.data;
   const events = eventsData?.data || [];
 
-  const { control, handleSubmit, reset, formState: { errors } } = useForm<{
+  const { control, handleSubmit, reset, setValue, formState: { errors } } = useForm<{
     fieldData: ContractFieldData;
   }>({
     resolver: zodResolver(z.object({ fieldData: ContractFieldDataSchema })),
@@ -253,6 +263,63 @@ export default function ContractDetail() {
                 </Grid>
               </Paper>
 
+              <Paper sx={{ p: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  PDF Attachment
+                </Typography>
+                {contract.pdfFileName ? (
+                  <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                    <PictureAsPdfOutlinedIcon color="error" />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={600} noWrap>
+                        {contract.pdfFileName}
+                      </Typography>
+                      {contract.pdfSize != null && (
+                        <Typography variant="caption" color="text.secondary">
+                          {(contract.pdfSize / 1024).toFixed(1)} KB
+                        </Typography>
+                      )}
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      component="a"
+                      href={getContractPdfUrl(id, organizationId)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      View PDF
+                    </Button>
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    No PDF attached to this contract.
+                  </Typography>
+                )}
+                {contract.status === "DRAFT" && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    component="label"
+                    startIcon={<UploadFileOutlinedIcon />}
+                    disabled={pdfMutation.isPending}
+                    sx={{ mt: contract.pdfFileName ? 2 : 0 }}
+                  >
+                    {contract.pdfFileName ? "Replace PDF" : "Upload PDF"}
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      hidden
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) pdfMutation.mutate(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </Button>
+                )}
+              </Paper>
+
               <Paper sx={{ overflow: "hidden" }}>
                 <Box sx={{ px: 3, py: 2, borderBottom: 1, borderColor: "divider" }}>
                   <Typography variant="h6">Line Items</Typography>
@@ -285,7 +352,9 @@ export default function ContractDetail() {
                           <TableCell align="right">{item.quantity}</TableCell>
                           <TableCell align="right">${item.unit_price.toFixed(2)}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: 600 }}>
-                            {item.total != null ? `$${item.total.toFixed(2)}` : "—"}
+                            ${(
+                              item.total ?? calculateItemTotal(item.quantity, item.unit_price)
+                            ).toFixed(2)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -365,7 +434,7 @@ export default function ContractDetail() {
         </Box>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogContent>
-            <ContractFieldForm control={control} errors={errors} />
+            <ContractFieldForm control={control} errors={errors} setValue={setValue} />
           </DialogContent>
           <Divider />
           <DialogActions sx={{ px: 3, py: 2 }}>

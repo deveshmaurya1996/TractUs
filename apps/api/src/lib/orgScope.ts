@@ -31,12 +31,16 @@ export function toContract(record: {
   fieldData: unknown;
   status: ContractStatus;
   deletedAt: Date | null;
+  pdfFileName?: string | null;
+  pdfSize?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }): Contract {
   return {
     ...record,
     fieldData: record.fieldData as ContractFieldData,
+    pdfFileName: record.pdfFileName ?? null,
+    pdfSize: record.pdfSize ?? null,
   };
 }
 

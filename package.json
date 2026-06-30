@@ -9,7 +9,10 @@
     "db:generate": "pnpm --filter @tractus/api db:generate",
     "db:push": "pnpm --filter @tractus/api db:push",
     "db:seed": "pnpm --filter @tractus/api db:seed",
-    "db:seed:force": "pnpm --filter @tractus/api db:seed:force"
+    "db:seed:force": "pnpm --filter @tractus/api db:seed:force",
+    "test": "pnpm --filter @tractus/api test",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down"
   },
   "devDependencies": {
     "prettier": "^3.2.5",

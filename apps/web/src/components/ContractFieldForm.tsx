@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Box, Button, TextField, Typography, Paper, Divider, IconButton, Stack } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -7,17 +8,168 @@ import {
   Control,
   Controller,
   FieldErrors,
+  UseFormSetValue,
   useFieldArray,
+  useWatch,
 } from "react-hook-form";
 import type { ContractFieldData } from "@tractus/types";
+import { calculateItemTotal } from "@tractus/validation";
 import Grid from "@mui/material/Grid2";
 
+type FormValues = { fieldData: ContractFieldData };
+
 interface ContractFieldFormProps {
-  control: Control<{ fieldData: ContractFieldData }>;
-  errors: FieldErrors<{ fieldData: ContractFieldData }>;
+  control: Control<FormValues>;
+  errors: FieldErrors<FormValues>;
+  setValue: UseFormSetValue<FormValues>;
 }
 
-export function ContractFieldForm({ control, errors }: ContractFieldFormProps) {
+interface LineItemRowProps {
+  index: number;
+  control: Control<FormValues>;
+  errors: FieldErrors<FormValues>;
+  setValue: UseFormSetValue<FormValues>;
+  onRemove: () => void;
+  disableRemove: boolean;
+}
+
+function LineItemRow({
+  index,
+  control,
+  errors,
+  setValue,
+  onRemove,
+  disableRemove,
+}: LineItemRowProps) {
+  const quantity = useWatch({ control, name: `fieldData.items.${index}.quantity` });
+  const unitPrice = useWatch({ control, name: `fieldData.items.${index}.unit_price` });
+  const total = useWatch({ control, name: `fieldData.items.${index}.total` });
+
+  useEffect(() => {
+    const q = Number(quantity);
+    const p = Number(unitPrice);
+    if (!Number.isFinite(q) || !Number.isFinite(p)) return;
+
+    const computed = calculateItemTotal(q, p);
+    if (total !== computed) {
+      setValue(`fieldData.items.${index}.total`, computed, { shouldDirty: true });
+    }
+  }, [quantity, unitPrice, total, index, setValue]);
+
+  return (
+    <Paper sx={{ p: 2, bgcolor: "grey.50" }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+          Item {index + 1}
+        </Typography>
+        <IconButton
+          size="small"
+          color="error"
+          aria-label={`Remove item ${index + 1}`}
+          disabled={disableRemove}
+          onClick={onRemove}
+        >
+          <DeleteOutlineIcon fontSize="small" />
+        </IconButton>
+      </Stack>
+      <Grid container spacing={2}>
+        <Grid size={12}>
+          <Controller
+            name={`fieldData.items.${index}.description`}
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                label="Description"
+                fullWidth
+                error={!!errors.fieldData?.items?.[index]?.description}
+                helperText={errors.fieldData?.items?.[index]?.description?.message}
+              />
+            )}
+          />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Controller
+            name={`fieldData.items.${index}.quantity`}
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                label="Quantity"
+                type="number"
+                fullWidth
+                inputProps={{ min: 0.01, step: "any" }}
+                error={!!errors.fieldData?.items?.[index]?.quantity}
+                helperText={errors.fieldData?.items?.[index]?.quantity?.message}
+                onChange={(e) => field.onChange(Number(e.target.value))}
+              />
+            )}
+          />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Controller
+            name={`fieldData.items.${index}.quantity_unit`}
+            control={control}
+            render={({ field }) => (
+              <TextField {...field} value={field.value ?? ""} label="Qty Unit" fullWidth />
+            )}
+          />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Controller
+            name={`fieldData.items.${index}.unit_price`}
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                label="Unit Price"
+                type="number"
+                fullWidth
+                inputProps={{ min: 0, step: "any" }}
+                error={!!errors.fieldData?.items?.[index]?.unit_price}
+                helperText={errors.fieldData?.items?.[index]?.unit_price?.message}
+                onChange={(e) => field.onChange(Number(e.target.value))}
+              />
+            )}
+          />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Controller
+            name={`fieldData.items.${index}.pricing_unit`}
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ""}
+                label="Pricing Unit"
+                fullWidth
+              />
+            )}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name={`fieldData.items.${index}.total`}
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                label="Total"
+                type="number"
+                fullWidth
+                value={field.value ?? 0}
+                InputProps={{ readOnly: true }}
+                helperText="Auto-calculated: quantity × unit_price"
+              />
+            )}
+          />
+        </Grid>
+      </Grid>
+    </Paper>
+  );
+}
+
+export function ContractFieldForm({ control, errors, setValue }: ContractFieldFormProps) {
   const { fields, append, remove } = useFieldArray({
     control,
     name: "fieldData.items",
@@ -107,109 +259,29 @@ export function ContractFieldForm({ control, errors }: ContractFieldFormProps) {
           variant="outlined"
           size="small"
           startIcon={<AddIcon />}
-          onClick={() => append({ description: "", quantity: 1, unit_price: 0 })}
+          onClick={() =>
+            append({
+              description: "",
+              quantity: 1,
+              unit_price: 0,
+              total: calculateItemTotal(1, 0),
+            })
+          }
         >
           Add Item
         </Button>
       </Box>
 
       {fields.map((item, index) => (
-        <Paper key={item.id} sx={{ p: 2, bgcolor: "grey.50" }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={600}>
-              Item {index + 1}
-            </Typography>
-            <IconButton
-              size="small"
-              color="error"
-              aria-label={`Remove item ${index + 1}`}
-              disabled={fields.length <= 1}
-              onClick={() => remove(index)}
-            >
-              <DeleteOutlineIcon fontSize="small" />
-            </IconButton>
-          </Stack>
-          <Grid container spacing={2}>
-            <Grid size={12}>
-              <Controller
-                name={`fieldData.items.${index}.description`}
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Description"
-                    fullWidth
-                    error={!!errors.fieldData?.items?.[index]?.description}
-                    helperText={errors.fieldData?.items?.[index]?.description?.message}
-                  />
-                )}
-              />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 3 }}>
-              <Controller
-                name={`fieldData.items.${index}.quantity`}
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Quantity"
-                    type="number"
-                    fullWidth
-                    onChange={(e) => field.onChange(Number(e.target.value))}
-                  />
-                )}
-              />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 3 }}>
-              <Controller
-                name={`fieldData.items.${index}.quantity_unit`}
-                control={control}
-                render={({ field }) => (
-                  <TextField {...field} label="Qty Unit" fullWidth />
-                )}
-              />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 3 }}>
-              <Controller
-                name={`fieldData.items.${index}.unit_price`}
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Unit Price"
-                    type="number"
-                    fullWidth
-                    onChange={(e) => field.onChange(Number(e.target.value))}
-                  />
-                )}
-              />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 3 }}>
-              <Controller
-                name={`fieldData.items.${index}.pricing_unit`}
-                control={control}
-                render={({ field }) => (
-                  <TextField {...field} label="Price Unit" fullWidth />
-                )}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <Controller
-                name={`fieldData.items.${index}.total`}
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Total"
-                    type="number"
-                    fullWidth
-                    onChange={(e) => field.onChange(Number(e.target.value))}
-                  />
-                )}
-              />
-            </Grid>
-          </Grid>
-        </Paper>
+        <LineItemRow
+          key={item.id}
+          index={index}
+          control={control}
+          errors={errors}
+          setValue={setValue}
+          onRemove={() => remove(index)}
+          disableRemove={fields.length <= 1}
+        />
       ))}
     </Box>
   );
