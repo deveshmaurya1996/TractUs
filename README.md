@@ -13,6 +13,7 @@ A full-stack contract management application built for the Full-Stack Engineerin
 - **Audit trail** — full event history per contract (create, update, status change, delete)
 - **Real-time updates** — Socket.io broadcasts status changes across browser tabs
 - **PDF attachments** — upload and view PDF on draft contracts
+- **OpenAPI docs** — Swagger UI + JSON spec at `/api/docs` (production-aware server URL)
 - **API tests** — Vitest + Supertest integration tests
 - **Docker Compose** — full stack (PostgreSQL + API + Web) with `docker compose up`
 
@@ -51,6 +52,8 @@ cp apps/web/.env.example apps/web/.env.local
 | `DATABASE_URL` | API | PostgreSQL connection string |
 | `PORT` | API | API server port (default `3001`) |
 | `LOG_LEVEL` | API | Pino log level (default `info`) |
+| `API_PUBLIC_URL` | API | Public API origin for OpenAPI/Swagger (optional; Docker sets from `NEXT_PUBLIC_SOCKET_URL`) |
+| `TRUST_PROXY` | API | Set to `true` behind Nginx/Caddy when not using `NODE_ENV=production` |
 | `NEXT_PUBLIC_API_URL` | Web | Frontend API base URL |
 | `NEXT_PUBLIC_SOCKET_URL` | Web | Socket.io server URL |
 
@@ -149,13 +152,37 @@ Seeds:
 - `POST /api/contracts/:id/pdf` — upload PDF (draft only, multipart field `pdf`)
 - `GET /api/contracts/:id/pdf` — download/view PDF
 
+## API Documentation
+
+Interactive Swagger UI and machine-readable OpenAPI spec (no API keys — use `organizationId` from `GET /api/organizations`).
+
+**Local:**
+
+- Swagger UI: http://localhost:3001/api/docs
+- OpenAPI JSON: http://localhost:3001/api/openapi.json
+
+**Production** (replace with your public API host):
+
+- Swagger UI: `http://<PUBLIC_IP>:3001/api/docs`
+- OpenAPI JSON: `http://<PUBLIC_IP>:3001/api/openapi.json`
+
+The spec’s `servers` URL is set from `API_PUBLIC_URL` (or `NEXT_PUBLIC_SOCKET_URL` in Docker Compose prod). Behind HTTPS reverse proxy, set `API_PUBLIC_URL=https://your-domain.com` and enable proxy trust (`NODE_ENV=production` or `TRUST_PROXY=true`).
+
 ## Tests
 
-Requires PostgreSQL running (same `DATABASE_URL` as dev):
+Requires PostgreSQL running. Tests use a **separate database** (`tractus_test` by default) so they do not overwrite dev seed data:
 
 ```bash
 pnpm db:push
 pnpm test
+```
+
+Optional: set `TEST_DATABASE_URL` in `apps/api/.env` to override the test database.
+
+If you previously ran tests against `tractus` and see **Test Client** instead of Acme/Globex data, restore dev seed:
+
+```bash
+pnpm db:seed:force
 ```
 
 ## Status Workflow
@@ -168,15 +195,78 @@ pnpm test
 
 ## Deployment
 
-> **Note:** Deploy the API and web app separately (e.g. Railway/Render for API + Vercel for Next.js), with a managed PostgreSQL instance.
+### Oracle Cloud (OCI) — recommended
 
-1. Set all environment variables on both services
-2. Run `pnpm db:push` against the production database
-3. Build: `pnpm build`
-4. Start API: `pnpm --filter @tractus/api start`
-5. Start web: `pnpm --filter @tractus/web start`
+Deploy the **full stack on one Always Free ARM VM** with Docker Compose (PostgreSQL + API + Web).
 
-**Deployed URL:** _Add your production URL here after deployment_
+**Prerequisites:** OCI account, Always Free Ampere A1 VM (Ubuntu 22.04/24.04), public IP.
+
+1. **Create a VM** (OCI Console → Compute → Instances → Ampere A1 shape is fine).
+
+2. **Open ingress ports** (VCN security list or NSG):
+   - `22` — SSH
+   - `3000` — Web UI
+   - `3001` — API + Socket.io  
+   Do **not** expose Postgres (`5433`) to the internet.
+
+3. **SSH into the VM** and install Docker:
+
+   ```bash
+   sudo apt update && sudo apt install -y git docker.io docker-compose-v2
+   sudo usermod -aG docker $USER
+   # log out and back in
+   ```
+
+4. **Clone and configure:**
+
+   ```bash
+   git clone <your-repo-url> Tract-Us
+   cd Tract-Us
+   cp .env.production.example .env
+   ```
+
+   Edit `.env` — replace `YOUR_PUBLIC_IP` with the VM public IP:
+
+   ```env
+   NEXT_PUBLIC_API_URL=http://203.0.113.10:3001/api
+   NEXT_PUBLIC_SOCKET_URL=http://203.0.113.10:3001
+   ```
+
+5. **Build and start:**
+
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+   ```
+
+   First start runs `db:push` and `db:seed` automatically (seed only if the DB is empty/partial).
+
+6. **Verify:** open `http://<PUBLIC_IP>:3000`, select **Acme Corp** or **Globex Inc**. API docs: `http://<PUBLIC_IP>:3001/api/docs`.
+
+7. **Add to this README:**
+
+   ```markdown
+   **Deployed URL:** http://<PUBLIC_IP>:3000
+   ```
+
+**Useful commands on the VM:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f api
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+pnpm db:seed:force   # only inside api container if you need to reset demo data
+```
+
+**Notes:**
+- Uses **PostgreSQL in Docker**, not Oracle Database — no Prisma changes needed.
+- PDF uploads persist in the `uploads_data` Docker volume.
+- For HTTPS, add Nginx/Caddy + a domain later; HTTP + IP is fine for assignment review.
+- Set an OCI **billing alert** and **stop/delete** the VM when finished to stay on free tier.
+
+### Other clouds (AWS / Azure / GCP)
+
+Same pattern: small VM + Docker Compose, or split API (VM/container) + managed Postgres. Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SOCKET_URL` to your public API URL at **web build time**.
+
+**Deployed URL:** _Add your Oracle OCI URL here after deployment (e.g. http://YOUR_PUBLIC_IP:3000)_
 
 **Evaluation access:** No login required — select an organization from the dropdown to begin.
 

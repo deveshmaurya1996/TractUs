@@ -11,6 +11,6 @@
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/__tests__"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

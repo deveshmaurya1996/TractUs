@@ -1,4 +1,5 @@
 import express from "express";
+import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 import prisma from "../lib/prisma";
 import {
@@ -16,7 +17,7 @@ import type {
   ContractStatus,
 } from "@tractus/types";
 import { emitContractEvent } from "../lib/socket";
-import { pdfPath, pdfUpload } from "../lib/uploads";
+import { pdfPath, pdfUpload, savePdf } from "../lib/uploads";
 import fs from "fs";
 import {
   findContractForOrg,
@@ -63,7 +64,7 @@ router.get("/", async (req, res) => {
     const { page, limit, search, status, organizationId } =
       SearchContractsSchema.parse(req.query);
 
-    const where: Record<string, unknown> = {
+    const where: Prisma.ContractWhereInput = {
       organizationId,
       ...notDeleted,
     };
@@ -126,21 +127,24 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const data = CreateContractSchema.parse(req.body);
-    const contract = await prisma.contract.create({
-      data: {
-        organizationId: data.organizationId,
-        clientName: data.fieldData.client_name,
-        poRefNo: data.fieldData.po_ref_no,
-        poDate: data.fieldData.po_date,
-        fieldData: data.fieldData,
-      },
-    });
-    await prisma.auditEvent.create({
-      data: {
-        contractId: contract.id,
-        eventType: "contract.created",
-        metadata: { contract },
-      },
+    const contract = await prisma.$transaction(async (tx) => {
+      const created = await tx.contract.create({
+        data: {
+          organizationId: data.organizationId,
+          clientName: data.fieldData.client_name,
+          poRefNo: data.fieldData.po_ref_no,
+          poDate: data.fieldData.po_date,
+          fieldData: data.fieldData,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          contractId: created.id,
+          eventType: "contract.created",
+          metadata: { contract: created },
+        },
+      });
+      return created;
     });
     emitContractEvent("contract.created", contract);
     const response: ApiResponse<Contract> = {
@@ -170,21 +174,24 @@ router.patch("/:id", async (req, res) => {
         .json({ success: false, message: "Only draft contracts can be edited" });
     }
     const data = UpdateContractSchema.parse(req.body);
-    const contract = await prisma.contract.update({
-      where: { id },
-      data: {
-        clientName: data.fieldData.client_name,
-        poRefNo: data.fieldData.po_ref_no,
-        poDate: data.fieldData.po_date,
-        fieldData: data.fieldData,
-      },
-    });
-    await prisma.auditEvent.create({
-      data: {
-        contractId: contract.id,
-        eventType: "contract.updated",
-        metadata: { contract },
-      },
+    const contract = await prisma.$transaction(async (tx) => {
+      const updated = await tx.contract.update({
+        where: { id },
+        data: {
+          clientName: data.fieldData.client_name,
+          poRefNo: data.fieldData.po_ref_no,
+          poDate: data.fieldData.po_date,
+          fieldData: data.fieldData,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          contractId: updated.id,
+          eventType: "contract.updated",
+          metadata: { contract: updated },
+        },
+      });
+      return updated;
     });
     emitContractEvent("contract.updated", contract);
     const response: ApiResponse<Contract> = {
@@ -215,16 +222,19 @@ router.patch("/:id/status", async (req, res) => {
         message: `Invalid status transition from ${existingContract.status} to ${status}`,
       });
     }
-    const contract = await prisma.contract.update({
-      where: { id },
-      data: { status },
-    });
-    await prisma.auditEvent.create({
-      data: {
-        contractId: contract.id,
-        eventType: "contract.status.changed",
-        metadata: { oldStatus: existingContract.status, newStatus: status },
-      },
+    const contract = await prisma.$transaction(async (tx) => {
+      const updated = await tx.contract.update({
+        where: { id },
+        data: { status },
+      });
+      await tx.auditEvent.create({
+        data: {
+          contractId: updated.id,
+          eventType: "contract.status.changed",
+          metadata: { oldStatus: existingContract.status, newStatus: status },
+        },
+      });
+      return updated;
     });
     emitContractEvent("contract.status.changed", contract);
     const response: ApiResponse<Contract> = {
@@ -257,16 +267,18 @@ router.delete("/:id", async (req, res) => {
     if (fs.existsSync(pdfFile)) {
       fs.unlinkSync(pdfFile);
     }
-    await prisma.auditEvent.create({
-      data: {
-        contractId: id,
-        eventType: "contract.deleted",
-        metadata: { contract: JSON.parse(JSON.stringify(existingContract)) },
-      },
-    });
-    await prisma.contract.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+    await prisma.$transaction(async (tx) => {
+      await tx.contract.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+      await tx.auditEvent.create({
+        data: {
+          contractId: id,
+          eventType: "contract.deleted",
+          metadata: { contract: JSON.parse(JSON.stringify(existingContract)) },
+        },
+      });
     });
     emitContractEvent("contract.deleted", { id });
     const response: ApiResponse = {
@@ -324,22 +336,22 @@ router.post("/:id/pdf", pdfUpload.single("pdf"), async (req, res) => {
         .json({ success: false, message: "PDF file is required" });
     }
 
-    const contract = await prisma.contract.update({
-      where: { id },
-      data: {
-        pdfFileName: req.file.originalname,
-        pdfSize: req.file.size,
-      },
-    });
-    await prisma.auditEvent.create({
-      data: {
-        contractId: id,
-        eventType: "contract.pdf.uploaded",
-        metadata: {
-          fileName: req.file.originalname,
-          size: req.file.size,
+    savePdf(organizationId, id, req.file.buffer);
+    const fileName = req.file.originalname;
+    const fileSize = req.file.size;
+    const contract = await prisma.$transaction(async (tx) => {
+      const updated = await tx.contract.update({
+        where: { id },
+        data: { pdfFileName: fileName, pdfSize: fileSize },
+      });
+      await tx.auditEvent.create({
+        data: {
+          contractId: id,
+          eventType: "contract.pdf.uploaded",
+          metadata: { fileName, size: fileSize },
         },
-      },
+      });
+      return updated;
     });
     emitContractEvent("contract.updated", contract);
     const response: ApiResponse<Contract> = {

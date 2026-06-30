@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../app";
 import prisma from "../lib/prisma";
@@ -34,6 +34,13 @@ describe("Contracts API", () => {
     ]);
     orgA = a.id;
     orgB = b.id;
+  });
+
+  afterAll(async () => {
+    await prisma.auditEvent.deleteMany();
+    await prisma.contract.deleteMany();
+    await prisma.organization.deleteMany();
+    await prisma.$disconnect();
   });
 
   it("creates a contract with valid JSON", async () => {

@@ -1,0 +1,13 @@
+services:
+  postgres:
+    ports: !reset []
+
+  api:
+    restart: unless-stopped
+
+  web:
+    restart: unless-stopped
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}

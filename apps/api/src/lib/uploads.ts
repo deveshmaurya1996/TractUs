@@ -16,19 +16,7 @@ export function ensureUploadDir(organizationId: string): string {
 }
 
 export const pdfUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, _file, cb) => {
-      try {
-        const organizationId = req.query.organizationId as string;
-        cb(null, ensureUploadDir(organizationId));
-      } catch (error) {
-        cb(error as Error, "");
-      }
-    },
-    filename: (req, _file, cb) => {
-      cb(null, `${req.params.id}.pdf`);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype === "application/pdf") {
@@ -38,3 +26,12 @@ export const pdfUpload = multer({
     }
   },
 });
+
+export function savePdf(
+  organizationId: string,
+  contractId: string,
+  buffer: Buffer
+): void {
+  ensureUploadDir(organizationId);
+  fs.writeFileSync(pdfPath(organizationId, contractId), buffer);
+}

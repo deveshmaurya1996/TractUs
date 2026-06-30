@@ -10,10 +10,11 @@ build/
 .turbo/
 *.tsbuildinfo
 
-# Environment variables (keep .env.example tracked)
+# Environment variables (keep example files tracked)
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # IDE
 .vscode/
