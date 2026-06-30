@@ -2,6 +2,18 @@
 
 A full-stack contract management application built for the Full-Stack Engineering Assignment.
 
+## Live deployment
+
+| | URL |
+|---|-----|
+| **App** | https://tractus-devesh.duckdns.org |
+| **Swagger UI** | https://tractus-devesh.duckdns.org/api/docs |
+| **OpenAPI JSON** | https://tractus-devesh.duckdns.org/api/openapi.json |
+
+Hosted on **Oracle Cloud** (Ubuntu 24.04, Mumbai) with Docker Compose, Caddy, and free DuckDNS.
+
+**Evaluation access:** No login required — select an organization from the dropdown to begin.
+
 ## Features
 
 - **Organization-scoped operations** — all contract API calls require an `organizationId`
@@ -162,11 +174,11 @@ Interactive Swagger UI and machine-readable OpenAPI spec (no API keys — use `o
 - Swagger UI: http://localhost:3001/api/docs
 - OpenAPI JSON: http://localhost:3001/api/openapi.json
 
-**Production** (single DuckDNS / domain URL):
+**Production:**
 
-- App: `https://<DOMAIN>`
-- Swagger UI: `https://<DOMAIN>/api/docs`
-- OpenAPI JSON: `https://<DOMAIN>/api/openapi.json`
+- App: https://tractus-devesh.duckdns.org
+- Swagger UI: https://tractus-devesh.duckdns.org/api/docs
+- OpenAPI JSON: https://tractus-devesh.duckdns.org/api/openapi.json
 
 The spec’s `servers` URL is set from `API_PUBLIC_URL` (or `NEXT_PUBLIC_SOCKET_URL` in Docker Compose prod). Behind Caddy, set all three env vars to `https://<DOMAIN>` (see `.env.production.example`).
 
@@ -199,9 +211,9 @@ pnpm db:seed:force
 
 ### Oracle Cloud (OCI) — recommended
 
-Deploy the **full stack on one Always Free ARM VM** with Docker Compose (PostgreSQL + API + Web + Caddy).
+Deploy the **full stack on one Always Free VM** with Docker Compose (PostgreSQL + API + Web + Caddy).
 
-**Prerequisites:** OCI account, Always Free Ampere A1 VM (Ubuntu 22.04/24.04), public IP, free [DuckDNS](https://www.duckdns.org) subdomain.
+**Prerequisites:** OCI account, Always Free VM (Ampere A1 or `VM.Standard.E2.1.Micro`), Ubuntu 22.04/24.04, public IP, free [DuckDNS](https://www.duckdns.org) subdomain. On **1 GB RAM** shapes, add **2 GB swap** before building (see `scripts/deploy-vm.sh`).
 
 #### One URL for everything (recommended for assignments)
 
@@ -209,15 +221,15 @@ Frontend, API, Socket.io, and Swagger share the same hostname:
 
 | What | URL |
 |------|-----|
-| App | `https://tractus-you.duckdns.org` |
-| API | `https://tractus-you.duckdns.org/api/...` |
-| Swagger UI | `https://tractus-you.duckdns.org/api/docs` |
+| App | `https://tractus-devesh.duckdns.org` |
+| API | `https://tractus-devesh.duckdns.org/api/...` |
+| Swagger UI | `https://tractus-devesh.duckdns.org/api/docs` |
 
-1. **Create a VM** (OCI Console → Compute → Instances → Ampere A1 shape is fine).
+1. **Create a VM** (OCI Console → Compute → Instances).
 
-2. **Get a free subdomain** at [duckdns.org](https://www.duckdns.org) (e.g. `tractus-you`) and point it at your VM **public IP**.
+2. **Get a free subdomain** at [duckdns.org](https://www.duckdns.org) and point it at your VM **public IP**.
 
-3. **Open ingress ports** (VCN security list or NSG):
+3. **Open ingress ports** (VCN security list → Default Security List → Add Ingress Rules):
    - `22` — SSH
    - `80` — HTTP (Let's Encrypt)
    - `443` — HTTPS  
@@ -231,21 +243,27 @@ Frontend, API, Socket.io, and Swagger share the same hostname:
    # log out and back in
    ```
 
-5. **Clone and configure:**
+5. **Clone and configure** (or run the one-shot script):
 
    ```bash
-   git clone <your-repo-url> Tract-Us
+   git clone https://github.com/deveshmaurya1996/TractUs.git Tract-Us
    cd Tract-Us
    cp .env.production.example .env
    ```
 
-   Edit `.env` — replace `tractus-you` with your DuckDNS name (all four values must match):
+   Edit `.env` — set your DuckDNS name (all four values must match):
 
    ```env
-   DOMAIN=tractus-you.duckdns.org
-   NEXT_PUBLIC_API_URL=https://tractus-you.duckdns.org/api
-   NEXT_PUBLIC_SOCKET_URL=https://tractus-you.duckdns.org
-   API_PUBLIC_URL=https://tractus-you.duckdns.org
+   DOMAIN=tractus-devesh.duckdns.org
+   NEXT_PUBLIC_API_URL=https://tractus-devesh.duckdns.org/api
+   NEXT_PUBLIC_SOCKET_URL=https://tractus-devesh.duckdns.org
+   API_PUBLIC_URL=https://tractus-devesh.duckdns.org
+   ```
+
+   **Quick deploy** (swap + Docker + compose):
+
+   ```bash
+   bash scripts/deploy-vm.sh
    ```
 
 6. **Build and start** (includes Caddy for HTTPS):
@@ -254,16 +272,9 @@ Frontend, API, Socket.io, and Swagger share the same hostname:
    docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml up --build -d
    ```
 
-   First start runs `db:push` and `db:seed` automatically (seed only if the DB is empty/partial). Caddy requests a Let's Encrypt certificate on first visit (may take a minute).
+   First start runs `db:push` and `db:seed` automatically (seed only if the DB is empty/partial). Caddy requests a Let's Encrypt certificate on first visit (may take 1–2 minutes after ports 80/443 are open).
 
-7. **Verify:** open `https://tractus-you.duckdns.org`, select **Acme Corp** or **Globex Inc**. Swagger: `https://tractus-you.duckdns.org/api/docs`.
-
-8. **Add to this README:**
-
-   ```markdown
-   **Deployed URL:** https://tractus-you.duckdns.org
-   **Swagger UI:** https://tractus-you.duckdns.org/api/docs
-   ```
+7. **Verify:** open https://tractus-devesh.duckdns.org, select **Acme Corp** or **Globex Inc**. Swagger: https://tractus-devesh.duckdns.org/api/docs.
 
 **Useful commands on the VM:**
 
@@ -298,12 +309,6 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ### Other clouds (AWS / Azure / GCP)
 
 Same pattern: small VM + Docker Compose (+ `docker-compose.domain.yml` for a single HTTPS URL), or split API (VM/container) + managed Postgres. Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SOCKET_URL` to your public API URL at **web build time**.
-
-**Deployed URL:** https://tractus-devesh.duckdns.org
-
-**Swagger UI:** https://tractus-devesh.duckdns.org/api/docs
-
-**Evaluation access:** No login required — select an organization from the dropdown to begin.
 
 ## Project Structure
 
