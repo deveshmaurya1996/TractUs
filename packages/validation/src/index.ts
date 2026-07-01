@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z, ZodError } from "zod";
 
 export const ContractStatusSchema = z.enum(["DRAFT", "FINALIZED", "ARCHIVED"]);
 
@@ -54,6 +54,10 @@ export const ContractFieldDataSchema = z
   })
   .strict();
 
+export const ContractFieldDataListSchema = z
+  .array(ContractFieldDataSchema)
+  .min(1, "At least one contract is required");
+
 export type ParsedContractFieldData = z.infer<typeof ContractFieldDataSchema>;
 export type ParsedContractItem = z.infer<typeof ContractItemSchema>;
 
@@ -90,4 +94,33 @@ export function formatZodErrors(error: z.ZodError): string {
 
 export function parseContractFieldData(data: unknown): ParsedContractFieldData {
   return ContractFieldDataSchema.parse(data);
+}
+
+export type ParseContractJsonResult =
+  | { ok: true; contracts: ParsedContractFieldData[] }
+  | { ok: false; message: string };
+
+export function parseContractJsonInput(raw: string): ParseContractJsonResult {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { ok: false, message: "JSON input is required" };
+  }
+
+  try {
+    const data = JSON.parse(trimmed);
+    if (Array.isArray(data)) {
+      const contracts = ContractFieldDataListSchema.parse(data);
+      return { ok: true, contracts };
+    }
+    const contract = ContractFieldDataSchema.parse(data);
+    return { ok: true, contracts: [contract] };
+  } catch (error) {
+    const message =
+      error instanceof ZodError
+        ? formatZodErrors(error)
+        : error instanceof SyntaxError
+          ? "Invalid JSON syntax"
+          : "Invalid contract data";
+    return { ok: false, message };
+  }
 }

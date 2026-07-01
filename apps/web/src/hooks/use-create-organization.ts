@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ApiResponse, Organization } from "@tractus/types";
 import { createOrganization } from "../lib/organizations-api";
 import { queryKeys } from "./query-keys";
 
@@ -19,6 +20,14 @@ export function useCreateOrganization(callbacks?: MutationCallbacks) {
       return result.data;
     },
     onSuccess: (organization) => {
+      queryClient.setQueryData<ApiResponse<Organization[]>>(
+        queryKeys.organizations,
+        (prev) => {
+          if (!prev?.data) return prev;
+          if (prev.data.some((org) => org.id === organization.id)) return prev;
+          return { ...prev, data: [...prev.data, organization] };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.organizations });
       callbacks?.onSuccess?.(organization.id);
     },

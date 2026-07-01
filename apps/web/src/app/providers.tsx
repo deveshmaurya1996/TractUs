@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import { theme } from "../theme/theme";
 import { AppLayout } from "../components/AppLayout";
+import { OrganizationProvider } from "../contexts/organization-context";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,7 +19,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <AppLayout>{children}</AppLayout>
+        <OrganizationProvider>
+          <AppLayout>{children}</AppLayout>
+        </OrganizationProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

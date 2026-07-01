@@ -26,6 +26,14 @@ import {
   parseOrganizationId,
   toContract,
 } from "../lib/orgScope";
+import {
+  assertNoDuplicateContract,
+  DuplicateContractError,
+} from "../lib/contractDuplicates";
+import {
+  buildContractCreateInput,
+  buildContractUpdateInput,
+} from "../lib/contractPersistence";
 
 const router = express.Router();
 
@@ -49,6 +57,14 @@ function handleRouteError(
 ) {
   if (error instanceof OrgScopeError) {
     return res.status(400).json({ success: false, message: error.message });
+  }
+  if (error instanceof DuplicateContractError) {
+    return res.status(409).json({
+      success: false,
+      message: error.message,
+      errors: [error.reason],
+      data: { existingContractId: error.existingContractId },
+    });
   }
   if (error instanceof ZodError) {
     return res
@@ -128,14 +144,17 @@ router.post("/", async (req, res) => {
   try {
     const data = CreateContractSchema.parse(req.body);
     const contract = await prisma.$transaction(async (tx) => {
+      const contentHash = await assertNoDuplicateContract(
+        tx,
+        data.organizationId,
+        data.fieldData
+      );
       const created = await tx.contract.create({
-        data: {
-          organizationId: data.organizationId,
-          clientName: data.fieldData.client_name,
-          poRefNo: data.fieldData.po_ref_no,
-          poDate: data.fieldData.po_date,
-          fieldData: data.fieldData,
-        },
+        data: buildContractCreateInput(
+          data.organizationId,
+          data.fieldData,
+          contentHash
+        ),
       });
       await tx.auditEvent.create({
         data: {
@@ -175,14 +194,15 @@ router.patch("/:id", async (req, res) => {
     }
     const data = UpdateContractSchema.parse(req.body);
     const contract = await prisma.$transaction(async (tx) => {
+      const contentHash = await assertNoDuplicateContract(
+        tx,
+        organizationId,
+        data.fieldData,
+        id
+      );
       const updated = await tx.contract.update({
         where: { id },
-        data: {
-          clientName: data.fieldData.client_name,
-          poRefNo: data.fieldData.po_ref_no,
-          poDate: data.fieldData.po_date,
-          fieldData: data.fieldData,
-        },
+        data: buildContractUpdateInput(data.fieldData, contentHash),
       });
       await tx.auditEvent.create({
         data: {

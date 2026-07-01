@@ -27,8 +27,8 @@ import {
   GridRowParams,
 } from "@mui/x-data-grid";
 import { StatusChip, EmptyState, LoadingOverlay, ConfirmDialog } from "@tractus/ui";
-import { formatDate, getNextStatus } from "@tractus/utils";
-import type { Contract } from "@tractus/types";
+import { formatDate, getNextStatus, getStatusActionColor, getStatusActionLabel } from "@tractus/utils";
+import type { Contract, ContractFieldData } from "@tractus/types";
 import { calculateItemTotal, ContractFieldDataSchema } from "@tractus/validation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,14 +37,15 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
-import type { ContractFieldData } from "@tractus/types";
 import { CreateContractDialog } from "../components/CreateContractDialog";
+import { EditContractDialog } from "../components/EditContractDialog";
 import { dataGridSx } from "../theme/theme";
-import { withOrganizationId } from "../lib/org-url";
 import {
   useContracts,
   useCreateContract,
+  useCreateContracts,
   useDeleteContract,
+  useUpdateContract,
   useUpdateContractStatus,
   useContractsSocket,
   useSelectedOrganization,
@@ -71,6 +72,7 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -104,6 +106,19 @@ export default function Home() {
     },
   });
 
+  const createBulkMutation = useCreateContracts({
+    onSuccess: (created) => {
+      setCreateDialogOpen(false);
+      reset({ fieldData: emptyFieldData });
+      showSnackbar(`${created?.length ?? 0} contracts created successfully!`, "success");
+    },
+    onError: (error) => {
+      const message =
+        error instanceof Error ? error.message : "Failed to create contracts";
+      showSnackbar(message, "error");
+    },
+  });
+
   const deleteMutation = useDeleteContract({
     onSuccess: () => {
       setDeleteDialogOpen(null);
@@ -117,7 +132,28 @@ export default function Home() {
     onError: () => showSnackbar("Failed to update status", "error"),
   });
 
+  const updateMutation = useUpdateContract(editingContract?.id ?? "", organizationId, {
+    onSuccess: () => {
+      setEditingContract(null);
+      showSnackbar("Contract updated successfully!", "success");
+    },
+    onError: () => showSnackbar("Failed to update contract", "error"),
+  });
+
   const { control, handleSubmit, reset, setValue, formState: { errors } } = useForm<{
+    fieldData: ContractFieldData;
+  }>({
+    resolver: zodResolver(z.object({ fieldData: ContractFieldDataSchema })),
+    defaultValues: { fieldData: emptyFieldData },
+  });
+
+  const {
+    control: editControl,
+    handleSubmit: handleEditSubmit,
+    reset: resetEditForm,
+    setValue: setEditValue,
+    formState: { errors: editErrors },
+  } = useForm<{
     fieldData: ContractFieldData;
   }>({
     resolver: zodResolver(z.object({ fieldData: ContractFieldDataSchema })),
@@ -141,6 +177,23 @@ export default function Home() {
   const handleCreateFromJson = (fieldData: ContractFieldData, pdfFile?: File | null) => {
     handleCreate(fieldData, pdfFile);
   };
+
+  const handleCreateBulkFromJson = (fieldDataList: ContractFieldData[]) => {
+    if (!selectedOrganization) return;
+    createBulkMutation.mutate({
+      organizationId: selectedOrganization.id,
+      fieldDataList,
+    });
+  };
+
+  const openEditDialog = (contract: Contract) => {
+    resetEditForm({ fieldData: contract.fieldData });
+    setEditingContract(contract);
+  };
+
+  const submitEditForm = handleEditSubmit((data) => {
+    updateMutation.mutate(data);
+  });
 
   const stopRowClick = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -238,7 +291,10 @@ export default function Home() {
                 <Tooltip title="Edit">
                   <IconButton
                     size="small"
-                    onClick={() => router.push(`/contracts/${params.row.id}`)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditDialog(params.row);
+                    }}
                   >
                     <EditOutlinedIcon fontSize="small" />
                   </IconButton>
@@ -247,7 +303,10 @@ export default function Home() {
                   <IconButton
                     size="small"
                     color="error"
-                    onClick={() => setDeleteDialogOpen(params.row.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteDialogOpen(params.row.id);
+                    }}
                   >
                     <DeleteOutlineIcon fontSize="small" />
                   </IconButton>
@@ -256,18 +315,20 @@ export default function Home() {
             )}
             {nextStatus && orgId && (
               <Button
-                variant="contained"
+                variant="outlined"
                 size="small"
+                color={getStatusActionColor(nextStatus)}
                 sx={{ ml: 0.5, minWidth: 88, whiteSpace: "nowrap" }}
-                onClick={() =>
+                onClick={(e) => {
+                  e.stopPropagation();
                   statusMutation.mutate({
                     id: params.row.id,
                     organizationId: orgId,
                     status: nextStatus,
-                  })
-                }
+                  });
+                }}
               >
-                {nextStatus}
+                {getStatusActionLabel(nextStatus)}
               </Button>
             )}
           </Stack>
@@ -277,8 +338,7 @@ export default function Home() {
   ];
 
   const handleRowClick = (params: GridRowParams<Contract>) => {
-    if (!organizationId) return;
-    router.push(withOrganizationId(`/contracts/${params.row.id}`, organizationId));
+    router.push(`/contracts/${params.row.id}`);
   };
 
   if (organizationsLoading) return <LoadingOverlay />;
@@ -396,13 +456,24 @@ export default function Home() {
         open={createDialogOpen}
         onClose={() => setCreateDialogOpen(false)}
         onSubmit={handleCreateFromJson}
+        onSubmitBulk={handleCreateBulkFromJson}
         onManualCreate={submitCreateForm}
-        isPending={createMutation.isPending}
+        isPending={createMutation.isPending || createBulkMutation.isPending}
         formControl={control}
         formErrors={errors}
         formSetValue={setValue}
         onResetForm={reset}
         emptyFieldData={emptyFieldData}
+      />
+
+      <EditContractDialog
+        open={!!editingContract}
+        onClose={() => setEditingContract(null)}
+        onSubmit={submitEditForm}
+        isPending={updateMutation.isPending}
+        formControl={editControl}
+        formErrors={editErrors}
+        formSetValue={setEditValue}
       />
 
       <ConfirmDialog

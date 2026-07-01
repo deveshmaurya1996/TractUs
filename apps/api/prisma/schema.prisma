@@ -28,6 +28,7 @@ model Contract {
   poRefNo         String
   poDate          String
   fieldData       Json
+  contentHash     String          @default("")
   status          ContractStatus  @default(DRAFT)
   deletedAt       DateTime?
   pdfFileName     String?
@@ -38,6 +39,8 @@ model Contract {
   auditEvents     AuditEvent[]
 
   @@index([organizationId])
+  @@index([organizationId, poRefNo])
+  @@index([organizationId, contentHash])
   @@index([status])
   @@index([clientName])
   @@index([deletedAt])

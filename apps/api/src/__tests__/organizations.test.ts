@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { createApp } from "../app";
 import prisma from "../lib/prisma";
@@ -6,18 +6,6 @@ import prisma from "../lib/prisma";
 const app = createApp();
 
 describe("Organizations API", () => {
-  beforeEach(async () => {
-    await prisma.auditEvent.deleteMany();
-    await prisma.contract.deleteMany();
-    await prisma.organization.deleteMany();
-  });
-
-  afterEach(async () => {
-    await prisma.auditEvent.deleteMany();
-    await prisma.contract.deleteMany();
-    await prisma.organization.deleteMany();
-  });
-
   it("lists organizations", async () => {
     await prisma.organization.create({ data: { name: "Acme Corp" } });
 
@@ -30,6 +18,9 @@ describe("Organizations API", () => {
   });
 
   it("creates an organization", async () => {
+    const listedBefore = await request(app).get("/api/organizations");
+    const initialCount = listedBefore.body.data.length;
+
     const res = await request(app)
       .post("/api/organizations")
       .send({ name: "Globex Inc" });
@@ -40,7 +31,12 @@ describe("Organizations API", () => {
     expect(res.body.data.id).toBeDefined();
 
     const listed = await request(app).get("/api/organizations");
-    expect(listed.body.data).toHaveLength(1);
+    expect(listed.body.data).toHaveLength(initialCount + 1);
+    expect(
+      listed.body.data.some(
+        (org: { id: string }) => org.id === res.body.data.id
+      )
+    ).toBe(true);
   });
 
   it("rejects empty organization name", async () => {

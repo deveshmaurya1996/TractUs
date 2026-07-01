@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ContractFieldData } from "@tractus/types";
+import type { Contract, ContractFieldData } from "@tractus/types";
 import {
   createContract,
   deleteContract,
@@ -8,8 +8,8 @@ import {
   uploadContractPdf,
 } from "../lib/contracts-api";
 
-interface MutationCallbacks {
-  onSuccess?: () => void;
+interface MutationCallbacks<TData = unknown> {
+  onSuccess?: (data?: TData) => void;
   onError?: (error: unknown) => void;
 }
 
@@ -43,9 +43,48 @@ export function useCreateContract(callbacks?: MutationCallbacks) {
 
       return result;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
-      callbacks?.onSuccess?.();
+      callbacks?.onSuccess?.(data);
+    },
+    onError: (error) => {
+      callbacks?.onError?.(error);
+    },
+  });
+}
+
+export function useCreateContracts(callbacks?: MutationCallbacks<Contract[]>) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (vars: {
+      organizationId: string;
+      fieldDataList: ContractFieldData[];
+    }) => {
+      const created = [];
+
+      for (let index = 0; index < vars.fieldDataList.length; index += 1) {
+        const fieldData = vars.fieldDataList[index];
+        const result = await createContract({
+          organizationId: vars.organizationId,
+          fieldData,
+        });
+
+        if (!result.success || !result.data) {
+          const label = fieldData.client_name || `contract ${index + 1}`;
+          throw new Error(
+            result.message || `Failed to create ${label} (item ${index + 1})`
+          );
+        }
+
+        created.push(result.data);
+      }
+
+      return created;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      callbacks?.onSuccess?.(data);
     },
     onError: (error) => {
       callbacks?.onError?.(error);

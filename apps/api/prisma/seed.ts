@@ -1,12 +1,14 @@
 import "../src/load-env";
 import { PrismaClient, ContractStatus } from "@prisma/client";
+import { hashContractFieldData } from "../src/lib/contractDuplicates";
+import { buildContractCreateInput } from "../src/lib/contractPersistence";
+import { parseContractFieldData } from "@tractus/validation";
 
 const prisma = new PrismaClient();
 
 const organizations = [{ name: "Acme Corp" }, { name: "Globex Inc" }] as const;
 
 const contracts = [
-  // Acme Corp
   {
     orgIndex: 0,
     clientName: "John Doe",
@@ -212,14 +214,15 @@ async function seedContract(
   organizationId: string,
   seed: (typeof contracts)[number]
 ) {
+  const fieldData = parseContractFieldData(seed.fieldData);
   const contract = await prisma.contract.create({
     data: {
-      organizationId,
-      clientName: seed.clientName,
-      poRefNo: seed.poRefNo,
-      poDate: seed.poDate,
+      ...buildContractCreateInput(
+        organizationId,
+        fieldData,
+        hashContractFieldData(fieldData)
+      ),
       status: seed.status,
-      fieldData: seed.fieldData,
     },
   });
 

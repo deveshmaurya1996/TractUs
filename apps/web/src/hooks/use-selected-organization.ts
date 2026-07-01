@@ -1,49 +1,48 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import { useOrganizationContext } from "../contexts/organization-context";
 import { useOrganizations } from "./use-organizations";
 
 export function useSelectedOrganization() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const organizationIdParam = searchParams.get("organizationId");
+  const { organizationId, setOrganizationId, isHydrated } = useOrganizationContext();
 
   const { data: orgData, isLoading } = useOrganizations();
-  const organizations = orgData?.data ?? [];
+  const organizations = useMemo(() => orgData?.data ?? [], [orgData?.data]);
 
-  const selectedOrganization = useMemo(
-    () => organizations.find((org) => org.id === organizationIdParam) ?? null,
-    [organizations, organizationIdParam]
-  );
-
-  const setOrganizationId = useCallback(
-    (organizationId: string | null) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (organizationId) {
-        params.set("organizationId", organizationId);
-      } else {
-        params.delete("organizationId");
-      }
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname);
-    },
-    [pathname, router, searchParams]
-  );
+  const urlOrganizationId = searchParams.get("organizationId");
 
   useEffect(() => {
-    if (pathname !== "/" || organizationIdParam || organizations.length === 0) {
+    if (urlOrganizationId && urlOrganizationId !== organizationId) {
+      setOrganizationId(urlOrganizationId);
+    }
+  }, [urlOrganizationId, organizationId, setOrganizationId]);
+
+  useEffect(() => {
+    if (!isHydrated || isLoading || organizations.length === 0) {
       return;
     }
-    setOrganizationId(organizations[0]?.id ?? null);
-  }, [organizationIdParam, organizations, pathname, setOrganizationId]);
+
+    const hasValidSelection =
+      organizationId && organizations.some((org) => org.id === organizationId);
+
+    if (!hasValidSelection) {
+      setOrganizationId(organizations[0]?.id ?? null);
+    }
+  }, [isHydrated, isLoading, organizationId, organizations, setOrganizationId]);
+
+  const selectedOrganization = useMemo(
+    () => organizations.find((org) => org.id === organizationId) ?? null,
+    [organizations, organizationId]
+  );
 
   return {
     selectedOrganization,
     organizationId: selectedOrganization?.id,
     organizations,
-    organizationsLoading: isLoading,
+    organizationsLoading: !isHydrated || isLoading,
     setOrganizationId,
   };
 }

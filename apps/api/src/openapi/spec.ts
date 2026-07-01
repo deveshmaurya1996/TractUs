@@ -261,6 +261,7 @@ const openApiSpecBase: Omit<OpenAPIV3.Document, "servers"> = {
             },
           },
           "400": error400,
+          "409": error409,
           "500": error500,
         },
       },

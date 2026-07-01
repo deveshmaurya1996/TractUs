@@ -1,4 +1,6 @@
 import "../load-env";
+import { afterAll, beforeEach } from "vitest";
+import prisma from "../lib/prisma";
 
 function resolveTestDatabaseUrl(): string {
   if (process.env.TEST_DATABASE_URL) {
@@ -14,3 +16,17 @@ function resolveTestDatabaseUrl(): string {
 }
 
 process.env.DATABASE_URL = resolveTestDatabaseUrl();
+
+async function resetTestDatabase() {
+  await prisma.auditEvent.deleteMany();
+  await prisma.contract.deleteMany();
+  await prisma.organization.deleteMany();
+}
+
+beforeEach(async () => {
+  await resetTestDatabase();
+});
+
+afterAll(async () => {
+  await prisma.$disconnect();
+});

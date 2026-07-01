@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../app";
 import prisma from "../lib/prisma";
@@ -24,23 +24,12 @@ describe("Contracts API", () => {
   let orgB: string;
 
   beforeEach(async () => {
-    await prisma.auditEvent.deleteMany();
-    await prisma.contract.deleteMany();
-    await prisma.organization.deleteMany();
-
     const [a, b] = await Promise.all([
       prisma.organization.create({ data: { name: "Org A" } }),
       prisma.organization.create({ data: { name: "Org B" } }),
     ]);
     orgA = a.id;
     orgB = b.id;
-  });
-
-  afterAll(async () => {
-    await prisma.auditEvent.deleteMany();
-    await prisma.contract.deleteMany();
-    await prisma.organization.deleteMany();
-    await prisma.$disconnect();
   });
 
   it("creates a contract with valid JSON", async () => {
@@ -52,6 +41,41 @@ describe("Contracts API", () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.clientName).toBe("Test Client");
     expect(res.body.data.status).toBe("DRAFT");
+
+    const stored = await prisma.contract.findUniqueOrThrow({
+      where: { id: res.body.data.id },
+      select: { contentHash: true },
+    });
+    expect(stored.contentHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("rejects duplicate PO reference within the same organization", async () => {
+    const first = await request(app)
+      .post("/api/contracts")
+      .send({ organizationId: orgA, fieldData: sampleFieldData });
+    expect(first.status).toBe(201);
+
+    const duplicate = await request(app)
+      .post("/api/contracts")
+      .send({ organizationId: orgA, fieldData: sampleFieldData });
+
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body.success).toBe(false);
+    expect(duplicate.body.message).toContain("PO reference");
+    expect(duplicate.body.errors).toContain("po_ref");
+    expect(duplicate.body.data.existingContractId).toBe(first.body.data.id);
+  });
+
+  it("allows the same PO reference in a different organization", async () => {
+    const inOrgA = await request(app)
+      .post("/api/contracts")
+      .send({ organizationId: orgA, fieldData: sampleFieldData });
+    expect(inOrgA.status).toBe(201);
+
+    const inOrgB = await request(app)
+      .post("/api/contracts")
+      .send({ organizationId: orgB, fieldData: sampleFieldData });
+    expect(inOrgB.status).toBe(201);
   });
 
   it("rejects invalid contract JSON", async () => {

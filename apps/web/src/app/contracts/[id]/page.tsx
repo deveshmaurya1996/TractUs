@@ -7,9 +7,6 @@ import {
   Box,
   Button,
   Paper,
-  Dialog,
-  DialogContent,
-  DialogActions,
   Alert,
   Snackbar,
   Stack,
@@ -30,19 +27,17 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
-import CloseIcon from "@mui/icons-material/Close";
 import { StatusChip, LoadingOverlay } from "@tractus/ui";
-import { formatDateTime, getNextStatus } from "@tractus/utils";
+import { formatDateTime, getNextStatus, getStatusActionColor, getStatusActionLabel } from "@tractus/utils";
 import type { AuditEvent, ContractFieldData } from "@tractus/types";
 import { calculateItemTotal, ContractFieldDataSchema } from "@tractus/validation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ContractFieldForm } from "../../../components/ContractFieldForm";
+import { EditContractDialog } from "../../../components/EditContractDialog";
 import { AuditJsonBlock } from "../../../components/AuditJsonBlock";
 import { DetailField } from "../../../components/DetailField";
 import { useSelectedOrganization } from "../../../hooks";
-import { homeWithOrganization } from "../../../lib/org-url";
 import {
   useContract,
   useAuditEvents,
@@ -71,7 +66,7 @@ const EVENT_LABELS: Record<string, string> = {
 export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { organizationId } = useSelectedOrganization();
+  const { organizationId, organizationsLoading } = useSelectedOrganization();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -126,10 +121,12 @@ export default function ContractDetail() {
     updateMutation.mutate(data);
   };
 
+  if (organizationsLoading) return <LoadingOverlay />;
+
   if (!organizationId) {
     return (
       <Paper sx={{ p: 4, textAlign: "center" }}>
-        <Typography gutterBottom>Select an organization on the home page first.</Typography>
+        <Typography gutterBottom>Select an organization from the header to continue.</Typography>
         <Button onClick={() => router.push("/")} variant="contained" sx={{ mt: 2 }}>
           Go to Contracts
         </Button>
@@ -142,7 +139,7 @@ export default function ContractDetail() {
     return (
       <Paper sx={{ p: 4, textAlign: "center" }}>
         <Typography gutterBottom>Contract not found</Typography>
-        <Button onClick={() => router.push(homeWithOrganization(organizationId))} variant="outlined" sx={{ mt: 2 }}>
+        <Button onClick={() => router.push("/")} variant="outlined" sx={{ mt: 2 }}>
           Back to Contracts
         </Button>
       </Paper>
@@ -161,7 +158,7 @@ export default function ContractDetail() {
               variant="body2"
               underline="hover"
               color="inherit"
-              onClick={() => router.push(homeWithOrganization(organizationId))}
+              onClick={() => router.push("/")}
             >
               Contracts
             </Link>
@@ -177,7 +174,7 @@ export default function ContractDetail() {
             spacing={2}
           >
             <Box display="flex" alignItems="center" gap={2}>
-              <IconButton onClick={() => router.push(homeWithOrganization(organizationId))} size="small" sx={{ border: 1, borderColor: "divider" }}>
+              <IconButton onClick={() => router.push("/")} size="small" sx={{ border: 1, borderColor: "divider" }}>
                 <ArrowBackIcon fontSize="small" />
               </IconButton>
               <Box>
@@ -206,7 +203,8 @@ export default function ContractDetail() {
               )}
               {nextStatus && (
                 <Button
-                  variant="contained"
+                  variant="outlined"
+                  color={getStatusActionColor(nextStatus)}
                   onClick={() =>
                     statusMutation.mutate({
                       id,
@@ -215,7 +213,7 @@ export default function ContractDetail() {
                     })
                   }
                 >
-                  Mark as {nextStatus}
+                  {getStatusActionLabel(nextStatus)}
                 </Button>
               )}
             </Stack>
@@ -412,41 +410,15 @@ export default function ContractDetail() {
         </Grid>
       </Stack>
 
-      <Dialog
+      <EditContractDialog
         open={editDialogOpen}
         onClose={() => setEditDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-        aria-labelledby="edit-contract-title"
-      >
-        <Box sx={{ position: "relative", px: 3, pt: 2.5, pb: 1 }}>
-          <Typography id="edit-contract-title" variant="h6" component="h2" fontWeight={700}>
-            Edit Contract
-          </Typography>
-          <IconButton
-            onClick={() => setEditDialogOpen(false)}
-            sx={{ position: "absolute", right: 8, top: 8 }}
-            size="small"
-            aria-label="Close"
-          >
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Box>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <DialogContent>
-            <ContractFieldForm control={control} errors={errors} setValue={setValue} />
-          </DialogContent>
-          <Divider />
-          <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button onClick={() => setEditDialogOpen(false)} color="inherit">
-              Cancel
-            </Button>
-            <Button type="submit" variant="contained" disabled={updateMutation.isPending}>
-              Save Changes
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+        onSubmit={handleSubmit(onSubmit)}
+        isPending={updateMutation.isPending}
+        formControl={control}
+        formErrors={errors}
+        formSetValue={setValue}
+      />
 
       <Snackbar
         open={snackbar.open}

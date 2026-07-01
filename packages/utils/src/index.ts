@@ -24,7 +24,14 @@ export function getStatusColor(
   }
 }
 
-export { getNextStatus } from "./status";
+export function getStatusActionColor(
+  status: ContractStatus
+): "primary" | "success" | "warning" | "error" | "info" {
+  const color = getStatusColor(status);
+  return color === "default" ? "primary" : color;
+}
+
+export { getNextStatus, getStatusActionLabel } from "./status";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";

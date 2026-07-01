@@ -5,6 +5,7 @@ export { useSelectedOrganization } from "./use-selected-organization";
 export { useContracts, useContract, useAuditEvents } from "./use-contracts";
 export {
   useCreateContract,
+  useCreateContracts,
   useDeleteContract,
   useUpdateContract,
   useUpdateContractStatus,
