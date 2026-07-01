@@ -20,7 +20,6 @@ import {
   TableRow,
   IconButton,
   Divider,
-  alpha,
 } from "@mui/material";
 import Grid from "@mui/material/Grid2";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -36,7 +35,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { EditContractDialog } from "../../../components/EditContractDialog";
-import { AuditJsonBlock } from "../../../components/AuditJsonBlock";
+import { AuditEventEntry } from "../../../components/AuditEventEntry";
 import { DetailField } from "../../../components/DetailField";
 import { useSelectedOrganization } from "../../../hooks";
 import {
@@ -55,14 +54,6 @@ const emptyFieldData: ContractFieldData = {
   po_ref_no: "",
   po_date: "",
   items: [{ description: "", quantity: 1, unit_price: 0, total: calculateItemTotal(1, 0) }],
-};
-
-const EVENT_LABELS: Record<string, string> = {
-  "contract.created": "Created",
-  "contract.updated": "Updated",
-  "contract.status.changed": "Status Changed",
-  "contract.deleted": "Deleted",
-  "contract.pdf.uploaded": "PDF Uploaded",
 };
 
 export default function ContractDetail() {
@@ -400,31 +391,13 @@ export default function ContractDetail() {
               </Typography>
 
               <Stack spacing={0} divider={<Divider flexItem />}>
-                {events.map((event: AuditEvent) => (
-                  <Box key={event.id} sx={{ py: 2 }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-                      <Box
-                        component="span"
-                        sx={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          height: 24,
-                          px: 1,
-                          borderRadius: "16px",
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
-                          color: "primary.main",
-                        }}
-                      >
-                        {EVENT_LABELS[event.eventType] ?? event.eventType}
-                      </Box>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatDateTime(new Date(event.createdAt))}
-                      </Typography>
-                    </Stack>
-                    <AuditJsonBlock data={event.metadata} />
-                  </Box>
+                {events.map((event: AuditEvent, index: number) => (
+                  <AuditEventEntry
+                    key={event.id}
+                    event={event}
+                    events={events}
+                    index={index}
+                  />
                 ))}
                 {events.length === 0 && (
                   <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>

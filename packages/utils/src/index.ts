@@ -32,6 +32,14 @@ export function getStatusActionColor(
 }
 
 export { getNextStatus, getStatusActionLabel } from "./status";
+export {
+  diffContractFieldData,
+  findPreviousContractSnapshot,
+  formatContractStatus,
+  getAuditEventLabel,
+  summarizeAuditEvent,
+} from "./audit-events";
+export type { AuditFieldChange } from "./audit-events";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";

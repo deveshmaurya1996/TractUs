@@ -6,7 +6,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "lint": "eslint src --max-warnings 0",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "date-fns": "^4.1.0"
@@ -17,6 +18,7 @@
     "@tractus/types": "workspace:*",
     "@types/node": "^20.11.24",
     "eslint": "^8.57.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.1"
   }
 }

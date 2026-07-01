@@ -236,6 +236,36 @@ describe("Contracts API", () => {
     expect(events.body.data.some((e: { eventType: string }) => e.eventType === "contract.status.changed")).toBe(true);
   });
 
+  it("records previousContract in update audit metadata", async () => {
+    const created = await request(app)
+      .post("/api/contracts")
+      .send({ organizationId: orgA, fieldData: sampleFieldData });
+
+    const contractId = created.body.data.id;
+
+    await request(app)
+      .patch(`/api/contracts/${contractId}`)
+      .query({ organizationId: orgA })
+      .send({
+        fieldData: {
+          ...sampleFieldData,
+          items: [{ ...sampleFieldData.items[0], quantity: 5 }],
+        },
+      });
+
+    const events = await request(app)
+      .get(`/api/contracts/${contractId}/events`)
+      .query({ organizationId: orgA });
+
+    const updateEvent = events.body.data.find(
+      (e: { eventType: string }) => e.eventType === "contract.updated"
+    );
+
+    expect(updateEvent).toBeDefined();
+    expect(updateEvent.metadata.previousContract.fieldData.items[0].quantity).toBe(1);
+    expect(updateEvent.metadata.contract.fieldData.items[0].quantity).toBe(5);
+  });
+
   it("only allows deleting draft contracts", async () => {
     const created = await request(app)
       .post("/api/contracts")

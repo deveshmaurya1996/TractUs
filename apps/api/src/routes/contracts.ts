@@ -208,7 +208,10 @@ router.patch("/:id", async (req, res) => {
         data: {
           contractId: updated.id,
           eventType: "contract.updated",
-          metadata: { contract: updated },
+          metadata: {
+            previousContract: JSON.parse(JSON.stringify(existingContract)),
+            contract: updated,
+          },
         },
       });
       return updated;
