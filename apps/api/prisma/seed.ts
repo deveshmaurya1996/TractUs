@@ -44,29 +44,13 @@ const contracts = [
   },
   {
     orgIndex: 0,
-    clientName: "Charlie Brown",
-    poRefNo: "ACME-PO-003",
-    poDate: "2024-04-25",
-    status: "FINALIZED" as ContractStatus,
-    fieldData: {
-      client_name: "Charlie Brown",
-      po_ref_no: "ACME-PO-003",
-      po_date: "2024-04-25",
-      delivery_terms: "CIF",
-      items: [
-        { description: "Equipment E", quantity: 2, unit_price: 499.99, total: 999.98 },
-      ],
-    },
-  },
-  {
-    orgIndex: 0,
     clientName: "Diana Prince",
-    poRefNo: "ACME-PO-004",
+    poRefNo: "ACME-PO-003",
     poDate: "2023-09-12",
     status: "ARCHIVED" as ContractStatus,
     fieldData: {
       client_name: "Diana Prince",
-      po_ref_no: "ACME-PO-004",
+      po_ref_no: "ACME-PO-003",
       po_date: "2023-09-12",
       payment_terms: "Net 45",
       items: [
@@ -74,39 +58,6 @@ const contracts = [
       ],
     },
   },
-  {
-    orgIndex: 0,
-    clientName: "Ethan Hunt",
-    poRefNo: "ACME-PO-005",
-    poDate: "2024-05-10",
-    status: "DRAFT" as ContractStatus,
-    fieldData: {
-      client_name: "Ethan Hunt",
-      po_ref_no: "ACME-PO-005",
-      po_date: "2024-05-10",
-      delivery_terms: "EXW",
-      items: [
-        { description: "Sensor G", quantity: 8, unit_price: 75, total: 600 },
-        { description: "Cable H", quantity: 50, unit_price: 4.5, total: 225 },
-      ],
-    },
-  },
-  {
-    orgIndex: 0,
-    clientName: "Fiona Green",
-    poRefNo: "ACME-PO-006",
-    poDate: "2024-03-01",
-    status: "ARCHIVED" as ContractStatus,
-    fieldData: {
-      client_name: "Fiona Green",
-      po_ref_no: "ACME-PO-006",
-      po_date: "2024-03-01",
-      items: [
-        { description: "Office Chairs", quantity: 12, unit_price: 149.99, total: 1799.88 },
-      ],
-    },
-  },
-  // Globex Inc
   {
     orgIndex: 1,
     clientName: "Bob Johnson",
@@ -125,80 +76,18 @@ const contracts = [
   },
   {
     orgIndex: 1,
-    clientName: "Alice Williams",
-    poRefNo: "GLOBEX-PO-002",
-    poDate: "2023-11-05",
-    status: "ARCHIVED" as ContractStatus,
-    fieldData: {
-      client_name: "Alice Williams",
-      po_ref_no: "GLOBEX-PO-002",
-      po_date: "2023-11-05",
-      items: [
-        { description: "Part D", quantity: 100, unit_price: 1.99, total: 199.0 },
-      ],
-    },
-  },
-  {
-    orgIndex: 1,
     clientName: "George Miller",
-    poRefNo: "GLOBEX-PO-003",
+    poRefNo: "GLOBEX-PO-002",
     poDate: "2024-06-18",
     status: "FINALIZED" as ContractStatus,
     fieldData: {
       client_name: "George Miller",
-      po_ref_no: "GLOBEX-PO-003",
+      po_ref_no: "GLOBEX-PO-002",
       po_date: "2024-06-18",
       payment_terms: "Net 60",
       delivery_terms: "DDP",
       items: [
         { description: "Steel Beams", quantity: 15, unit_price: 320, total: 4800 },
-      ],
-    },
-  },
-  {
-    orgIndex: 1,
-    clientName: "Hannah Lee",
-    poRefNo: "GLOBEX-PO-004",
-    poDate: "2024-02-14",
-    status: "DRAFT" as ContractStatus,
-    fieldData: {
-      client_name: "Hannah Lee",
-      po_ref_no: "GLOBEX-PO-004",
-      po_date: "2024-02-14",
-      items: [
-        { description: "Packaging Material", quantity: 200, unit_price: 3.25, total: 650 },
-      ],
-    },
-  },
-  {
-    orgIndex: 1,
-    clientName: "Ian Cooper",
-    poRefNo: "GLOBEX-PO-005",
-    poDate: "2024-07-02",
-    status: "FINALIZED" as ContractStatus,
-    fieldData: {
-      client_name: "Ian Cooper",
-      po_ref_no: "GLOBEX-PO-005",
-      po_date: "2024-07-02",
-      payment_terms: "Net 30",
-      items: [
-        { description: "Hydraulic Pump", quantity: 3, unit_price: 890, total: 2670 },
-      ],
-    },
-  },
-  {
-    orgIndex: 1,
-    clientName: "Julia Adams",
-    poRefNo: "GLOBEX-PO-006",
-    poDate: "2023-12-20",
-    status: "ARCHIVED" as ContractStatus,
-    fieldData: {
-      client_name: "Julia Adams",
-      po_ref_no: "GLOBEX-PO-006",
-      po_date: "2023-12-20",
-      delivery_terms: "FOB",
-      items: [
-        { description: "Control Panel", quantity: 4, unit_price: 1250, total: 5000 },
       ],
     },
   },

@@ -33,11 +33,20 @@ export function useContractSocket(id: string) {
       queryClient.invalidateQueries({ queryKey: ["events", id] });
     };
 
+    const onDeleted = (payload: { id?: string }) => {
+      if (payload?.id !== id) return;
+      queryClient.removeQueries({ queryKey: ["contract", id] });
+      queryClient.removeQueries({ queryKey: ["events", id] });
+      queryClient.invalidateQueries({ queryKey: ["contracts"] });
+    };
+
     socket.on("contract.updated", refresh);
     socket.on("contract.status.changed", refresh);
+    socket.on("contract.deleted", onDeleted);
     return () => {
       socket.off("contract.updated", refresh);
       socket.off("contract.status.changed", refresh);
+      socket.off("contract.deleted", onDeleted);
     };
   }, [queryClient, id]);
 }

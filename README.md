@@ -1,6 +1,8 @@
 # Contract Operations Console
 
-A full-stack contract management application built for the Full-Stack Engineering Assignment.
+A full-stack, multi-tenant contract management application built for the Full-Stack Engineering Assignment. Organizations are fully isolated: every contract operation is scoped by `organizationId` on the server.
+
+**Repository:** [github.com/deveshmaurya1996/TractUs](https://github.com/deveshmaurya1996/TractUs)
 
 ## Live deployment
 
@@ -12,39 +14,124 @@ A full-stack contract management application built for the Full-Stack Engineerin
 
 Hosted on **Oracle Cloud** (Ubuntu 24.04, Mumbai) with Docker Compose, Caddy, and free DuckDNS.
 
-**Evaluation access:** No login required — select an organization from the dropdown to begin.
+**Evaluation access:** No login required — use the **organization switcher** in the header (Acme Corp or Globex Inc).
 
 ## Features
 
-- **Organization-scoped operations** — all contract API calls require an `organizationId`
-- **JSON upload & validation** — upload contract JSON with Zod schema validation and field-level error feedback
-- **Contract CRUD** — create, read, update, soft-delete (draft only)
-- **Status workflow** — DRAFT → FINALIZED → ARCHIVED (invalid transitions return 409)
-- **Search & filter** — server-side search by client name, contract ID, PO ref; filter by status
-- **Pagination** — server-side pagination on the contract list
-- **Audit trail** — full event history per contract (create, update, status change, delete)
-- **Real-time updates** — Socket.io broadcasts status changes across browser tabs
-- **PDF attachments** — upload and view PDF on draft contracts
-- **OpenAPI docs** — Swagger UI + JSON spec at `/api/docs` (production-aware server URL)
-- **API tests** — Vitest + Supertest integration tests
-- **Docker Compose** — full stack (PostgreSQL + API + Web) with `docker compose up`
+### Frontend
+
+- **Organization switcher** — global header control; selection persisted in `sessionStorage`; create new organizations from the UI
+- **Contract list** — server-side search, status filter, and pagination (MUI DataGrid)
+- **Create contracts** — manual form, JSON paste editor, or `.json` file upload; optional PDF on single create
+- **Bulk create** — paste or upload a JSON **array** of contracts; preview count before submit
+- **Edit draft** — modal on the list page and contract detail page
+- **Status actions** — Finalize (DRAFT → FINALIZED) and Archive (FINALIZED → ARCHIVED) with clear labels
+- **Delete draft** — confirmation dialog on the list page and contract detail page
+- **Contract detail** — overview, line items, PDF view/upload, audit history
+- **Validation feedback** — Zod errors on forms and JSON input; API errors shown in snackbars
+- **Real-time updates** — Socket.io refreshes the list and detail views across browser tabs
+- **Empty & loading states** — overlays and empty-state messaging when no org or no contracts
+
+### Backend
+
+- **Multi-tenant isolation** — all contract routes require `organizationId`; cross-org access returns 404
+- **Status workflow** — invalid transitions return **409 Conflict** with a clear message
+- **Duplicate prevention** — duplicate PO reference or identical contract content within an org returns **409**
+- **JSON validation** — shared Zod schemas in `@tractus/validation`
+- **Audit trail** — events for create, update, status change, delete, and PDF upload
+- **OpenAPI** — Swagger UI + JSON spec with production-aware server URL
+- **Integration tests** — Vitest + Supertest (31 tests) against a separate `tractus_test` database
+
+### DevOps
+
+- **Docker Compose** — PostgreSQL + API + Web with `docker compose up --build`
+- **CI** — GitHub Actions: test, lint, build on every push/PR
+- **CD** — auto-deploy to Oracle VM after CI passes on `master`
+
+## Architecture
+
+```
+┌─────────────┐     HTTPS      ┌──────────────┐
+│   Browser   │◄──────────────►│    Caddy     │  (production only)
+│  Next.js 15 │                │  :80 / :443  │
+└──────┬──────┘                └──────┬───────┘
+       │ REST + Socket.io              │
+       ▼                               ▼
+┌─────────────┐                ┌──────────────┐
+│  apps/web   │                │   apps/api   │
+│  TanStack   │   workspace    │   Express    │
+│  Query      │◄──────────────►│   Prisma     │
+│  MUI        │   packages/*   │   Socket.io  │
+└─────────────┘                └──────┬───────┘
+                                      │
+                                      ▼
+                               ┌──────────────┐
+                               │  PostgreSQL  │
+                               └──────────────┘
+```
+
+**Request flow**
+
+1. User selects an organization (stored in React context + `sessionStorage`).
+2. Web calls `GET /api/contracts?organizationId=…` with search/filter/pagination query params.
+3. API validates input with Zod, scopes queries by `organizationId`, and returns `{ success, data, message }`.
+4. Mutations emit Socket.io events; all connected clients invalidate TanStack Query caches.
+
+**Shared packages**
+
+| Package | Role |
+|---------|------|
+| `@tractus/types` | API and domain TypeScript types |
+| `@tractus/validation` | Zod schemas (contracts, search, organizations) |
+| `@tractus/ui` | Loading overlay, empty state, confirm dialog |
+| `@tractus/utils` | Dates, status helpers, API/socket URL defaults |
 
 ## Tech Stack
 
 | Layer | Technologies |
 |-------|----------------|
-| Monorepo | TurboRepo, pnpm |
+| Monorepo | TurboRepo, pnpm workspaces |
 | Frontend | Next.js 15, React, MUI, TanStack Query, React Hook Form, Zod, Socket.io Client |
 | Backend | Express, Prisma, PostgreSQL, Socket.io, Zod, Pino |
-| Shared | `@tractus/types`, `@tractus/validation`, `@tractus/ui`, `@tractus/utils` |
+| Infra | Docker Compose, Caddy (HTTPS), GitHub Actions, Oracle Cloud |
+
+## Project structure
+
+```
+├── apps/
+│   ├── api/
+│   │   ├── prisma/           # schema, seed
+│   │   ├── scripts/          # db helpers, backfill, test DB setup
+│   │   └── src/
+│   │       ├── routes/       # contracts, organizations, docs
+│   │       ├── lib/          # prisma, duplicates, persistence, socket
+│   │       └── __tests__/    # Vitest integration tests
+│   └── web/
+│       └── src/
+│           ├── app/          # list + contract detail pages
+│           ├── components/   # dialogs, org switcher, forms
+│           ├── contexts/     # organization selection
+│           ├── hooks/        # queries, mutations, socket
+│           └── lib/          # API clients
+├── packages/
+│   ├── types/
+│   ├── validation/
+│   ├── ui/
+│   └── utils/
+├── docker/                   # Dockerfiles, Caddyfile, api entrypoint
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── docker-compose.domain.yml
+└── .github/workflows/        # ci.yml, deploy.yml
+```
 
 ## Prerequisites
 
 - Node.js 20+
 - pnpm 10+
-- Docker & Docker Compose
+- Docker & Docker Compose (for full stack or Postgres only)
 
-## Environment Variables
+## Environment variables
 
 Copy `.env.example` to `.env` at the **repo root** (enough for most local dev):
 
@@ -52,7 +139,7 @@ Copy `.env.example` to `.env` at the **repo root** (enough for most local dev):
 cp .env.example .env
 ```
 
-**App-level examples** (optional overrides):
+Optional app-level overrides:
 
 ```bash
 cp apps/api/.env.example apps/api/.env
@@ -64,298 +151,293 @@ cp apps/web/.env.example apps/web/.env.local
 | `DATABASE_URL` | API | PostgreSQL connection string |
 | `PORT` | API | API server port (default `3001`) |
 | `LOG_LEVEL` | API | Pino log level (default `info`) |
-| `API_PUBLIC_URL` | API | Public API origin for OpenAPI/Swagger (optional; Docker sets from `NEXT_PUBLIC_SOCKET_URL`) |
-| `TRUST_PROXY` | API | Set to `true` behind Nginx/Caddy when not using `NODE_ENV=production` |
-| `DOMAIN` | Caddy | Public hostname (e.g. `tractus-you.duckdns.org`) when using domain compose |
-| `NEXT_PUBLIC_API_URL` | Web | Frontend API base URL |
-| `NEXT_PUBLIC_SOCKET_URL` | Web | Socket.io server URL |
+| `API_PUBLIC_URL` | API | Public API origin for OpenAPI/Swagger |
+| `TRUST_PROXY` | API | Set to `true` behind a reverse proxy |
+| `DOMAIN` | Caddy | Public hostname when using domain compose |
+| `NEXT_PUBLIC_API_URL` | Web | Frontend API base URL (baked in at **web build time**) |
+| `NEXT_PUBLIC_SOCKET_URL` | Web | Socket.io server URL (baked in at **web build time**) |
 
-**Env loading order** (root first, app-level overrides if present):
+**Loading order:** root `Tract-Us/.env` first; `apps/api/.env` or `apps/web/.env.local` override if present.
 
-| App | Root `.env` | Optional override |
-|-----|-------------|-------------------|
-| API | `Tract-Us/.env` | `apps/api/.env` |
-| Web | `Tract-Us/.env` | `apps/web/.env` or `.env.local` |
+## Running locally
 
-You do **not** need separate env files in `apps/api` or `apps/web` unless you want to override values locally.
-
-## Local Development
-
-### Option A — Docker (full stack)
+### Option A — Docker (recommended)
 
 ```bash
 docker compose up --build
 ```
 
-- Frontend: http://localhost:3000
-- API: http://localhost:3001
-- PostgreSQL: localhost:5433 (host) / `postgres:5432` (internal)
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| API | http://localhost:3001 |
+| Swagger | http://localhost:3001/api/docs |
+| PostgreSQL | localhost:5433 (host) / `postgres:5432` (internal) |
+
+On first start the API container runs `db:push`, `db:backfill-content-hash`, and `db:seed` (seed skips if data already exists).
 
 Stop with `docker compose down`.
 
 ### Option B — Native (pnpm)
 
-1. **Start PostgreSQL**
+1. **Start PostgreSQL** (Docker is fine for DB only):
+
    ```bash
-   docker-compose up -d
+   docker compose up -d postgres
    ```
 
-2. **Install dependencies**
+2. **Install and prepare the database:**
+
    ```bash
    pnpm install
-   ```
-
-3. **Generate Prisma client, push schema & seed**
-   ```bash
    pnpm db:generate
    pnpm db:push
    pnpm db:seed
    ```
-   Schema lives at `apps/api/prisma/schema.prisma`.
 
-4. **Start dev servers**
+3. **Start dev servers:**
+
    ```bash
    pnpm dev
    ```
 
-   This starts the API and web app in parallel (no Turbo required on Windows).
-
    - Frontend: http://localhost:3000
    - API: http://localhost:3001
 
-## Seed Data
+## Database schema and migrations
 
-Run the seed script after `db:push`:
+This project uses **Prisma `db push`** (schema sync) rather than versioned SQL migrations — appropriate for the assignment and Docker-first workflow.
+
+Schema: `apps/api/prisma/schema.prisma`
+
+Notable fields:
+
+- `Contract.contentHash` — SHA-256 of normalized JSON; used for duplicate-content detection
+- `Contract.deletedAt` — soft delete for draft contracts
+
+**Production / Docker startup** (`docker/api-entrypoint.sh`):
+
+1. `pnpm db:push` — apply schema
+2. `pnpm db:backfill-content-hash` — fill `contentHash` for any legacy rows
+3. `pnpm db:seed` — seed demo data if needed
+4. Start API
+
+Manual backfill (after schema changes):
 
 ```bash
-pnpm db:seed
+pnpm --filter @tractus/api db:backfill-content-hash
 ```
 
-To **reset and reseed** (clears all data first):
+## Seed data
 
 ```bash
-pnpm db:seed:force
+pnpm db:seed          # skip if contracts already exist
+pnpm db:seed:force    # wipe and reseed
 ```
 
-`pnpm db:seed` skips only when **contracts already exist**. If the DB is empty (e.g. after `pnpm test`, which wipes data), a normal `pnpm db:seed` will populate it — you do not need `--force` unless you want to replace existing contracts.
+`pnpm db:seed` skips when the expected contract count is already present. After `pnpm test` (which uses `tractus_test`), dev data is untouched; reseed dev with `pnpm db:seed:force` if needed.
 
 **If the UI looks empty after seeding:**
-1. Confirm Postgres is running and `DATABASE_URL` in `apps/api/.env` points to `localhost:5433` (same DB you seeded).
-2. Refresh the app — org IDs change after reseed; stale `sessionStorage` can point at old organizations.
-3. Run `pnpm db:seed` again (or `pnpm db:seed:force` to fully reset).
 
-Seeds:
-- **2 organizations**: Acme Corp (6 contracts), Globex Inc (6 contracts)
-- **12 contracts** across DRAFT, FINALIZED, and ARCHIVED statuses
-- **Audit events** for each contract (create + status changes)
+1. Confirm Postgres is running and `DATABASE_URL` points at the DB you seeded (`localhost:5433` for local Docker).
+2. Hard refresh — org IDs change after reseed; clear stale `sessionStorage` or re-select an organization in the header switcher.
 
-## API Endpoints
+**Seeded content** (matches assignment: 2 orgs, 5 contracts across statuses):
+
+| Organization | Contracts | Status mix |
+|--------------|-----------|------------|
+| Acme Corp | 3 | 1 DRAFT, 1 FINALIZED, 1 ARCHIVED |
+| Globex Inc | 2 | 1 DRAFT, 1 FINALIZED |
+
+Each contract includes audit events (create + status changes where applicable).
+
+## API endpoints
 
 ### Organizations
-- `GET /api/organizations` — list organizations
 
-### Contracts (all routes require `?organizationId=<uuid>` except `POST`)
-- `GET /api/contracts` — list with search, status filter, pagination
-- `GET /api/contracts/:id` — contract details
-- `POST /api/contracts` — create contract (`organizationId` in body)
-- `PATCH /api/contracts/:id` — update draft contract
-- `PATCH /api/contracts/:id/status` — transition status
-- `DELETE /api/contracts/:id` — soft-delete draft contract
-- `GET /api/contracts/:id/events` — audit trail
-- `POST /api/contracts/:id/pdf` — upload PDF (draft only, multipart field `pdf`)
-- `GET /api/contracts/:id/pdf` — download/view PDF
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/organizations` | List organizations |
+| `POST` | `/api/organizations` | Create organization (`{ "name": "..." }`) |
 
-## API Documentation
+### Contracts
 
-Interactive Swagger UI and machine-readable OpenAPI spec (no API keys — use `organizationId` from `GET /api/organizations`).
+All contract routes except `POST /api/contracts` require `?organizationId=<uuid>`.
 
-**Local:**
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/contracts` | List — `search`, `status`, `page`, `limit` |
+| `GET` | `/api/contracts/:id` | Contract details |
+| `POST` | `/api/contracts` | Create (`organizationId` + `fieldData` in body) |
+| `PATCH` | `/api/contracts/:id` | Update draft only |
+| `PATCH` | `/api/contracts/:id/status` | Transition status |
+| `DELETE` | `/api/contracts/:id` | Soft-delete draft only |
+| `GET` | `/api/contracts/:id/events` | Audit trail |
+| `POST` | `/api/contracts/:id/pdf` | Upload PDF (draft, multipart `pdf`) |
+| `GET` | `/api/contracts/:id/pdf` | Download/view PDF |
 
-- Swagger UI: http://localhost:3001/api/docs
-- OpenAPI JSON: http://localhost:3001/api/openapi.json
+### Common response shapes
 
-**Production:**
+**Success**
 
-- App: https://tractus-devesh.duckdns.org
-- Swagger UI: https://tractus-devesh.duckdns.org/api/docs
-- OpenAPI JSON: https://tractus-devesh.duckdns.org/api/openapi.json
+```json
+{ "success": true, "data": { ... } }
+```
 
-The spec’s `servers` URL is set from `API_PUBLIC_URL` (or `NEXT_PUBLIC_SOCKET_URL` in Docker Compose prod). Behind Caddy, set all three env vars to `https://<DOMAIN>` (see `.env.production.example`).
+**Validation error (400)**
+
+```json
+{ "success": false, "message": "client_name: Client name is required" }
+```
+
+**Conflict (409)** — workflow or duplicate
+
+```json
+{
+  "success": false,
+  "message": "Only draft contracts can be edited.",
+  "errors": ["po_ref"],
+  "data": { "existingContractId": "..." }
+}
+```
+
+Stack traces are never returned to clients; errors are logged server-side with Pino.
+
+## API documentation
+
+| Environment | Swagger UI | OpenAPI JSON |
+|-------------|------------|--------------|
+| Local | http://localhost:3001/api/docs | http://localhost:3001/api/openapi.json |
+| Production | https://tractus-devesh.duckdns.org/api/docs | https://tractus-devesh.duckdns.org/api/openapi.json |
+
+Use `organizationId` from `GET /api/organizations` for all contract calls.
+
+## Status workflow
+
+```
+DRAFT ──► FINALIZED ──► ARCHIVED
+```
+
+| Current status | Allowed next | UI actions |
+|----------------|--------------|------------|
+| DRAFT | FINALIZED | Edit, delete, finalize, PDF upload |
+| FINALIZED | ARCHIVED | Archive only |
+| ARCHIVED | — | Read-only |
+
+Invalid transitions (e.g. DRAFT → ARCHIVED) return **409 Conflict**.
+
+## Real-time updates
+
+The API emits Socket.io events after mutations:
+
+| Event | When |
+|-------|------|
+| `contract.created` | New contract |
+| `contract.updated` | Draft edited |
+| `contract.status.changed` | Finalize or archive |
+| `contract.deleted` | Draft soft-deleted |
+
+The web app subscribes via `useContractsSocket` (list) and `useContractSocket` (detail) and invalidates TanStack Query caches — **no manual refresh** needed when testing in two browser tabs.
+
+**Try it:** open the app in two tabs on the same contract — finalize or delete in tab A and watch tab B update automatically (list refreshes; detail shows updated status or “Contract not found” after delete).
 
 ## Tests
 
-Requires PostgreSQL running. Tests use a **separate database** (`tractus_test` by default) so they do not overwrite dev seed data:
+Requires PostgreSQL. Tests use a **separate database** (`tractus_test`) so dev seed data is not wiped:
 
 ```bash
 pnpm db:push
 pnpm test
+pnpm lint
+pnpm build
 ```
 
-Optional: set `TEST_DATABASE_URL` in `apps/api/.env` to override the test database.
+CI runs the same pipeline on GitHub Actions (`.github/workflows/ci.yml`).
 
-If you previously ran tests against `tractus` and see **Test Client** instead of Acme/Globex data, restore dev seed:
+Test suite highlights:
 
-```bash
-pnpm db:seed:force
-```
-
-## Status Workflow
-
-| Status | Allowed actions |
-|--------|-----------------|
-| DRAFT | Edit, delete, finalize |
-| FINALIZED | Archive only |
-| ARCHIVED | None |
+- Multi-tenant isolation (404 across orgs)
+- Status workflow 409s
+- Duplicate PO and duplicate content 409s
+- JSON validation and strict schema keys
+- Server-side search and pagination
+- Audit events on create and status change
+- Production build output (`dist/index.js` exists)
 
 ## Deployment
 
-### Oracle Cloud (OCI) — recommended
+### Oracle Cloud (OCI)
 
-Deploy the **full stack on one Always Free VM** with Docker Compose (PostgreSQL + API + Web + Caddy).
+Full stack on one Always Free VM: PostgreSQL + API + Web + Caddy (HTTPS).
 
-**Prerequisites:** OCI account, Always Free VM (Ampere A1 or `VM.Standard.E2.1.Micro`), Ubuntu 22.04/24.04, public IP, free [DuckDNS](https://www.duckdns.org) subdomain. On **1 GB RAM** shapes, add **2 GB swap** before building (see `scripts/deploy-vm.sh`).
-
-#### One URL for everything (recommended for assignments)
-
-Frontend, API, Socket.io, and Swagger share the same hostname:
+**Production URLs** (single origin):
 
 | What | URL |
 |------|-----|
-| App | `https://tractus-devesh.duckdns.org` |
-| API | `https://tractus-devesh.duckdns.org/api/...` |
-| Swagger UI | `https://tractus-devesh.duckdns.org/api/docs` |
+| App | https://tractus-devesh.duckdns.org |
+| API | https://tractus-devesh.duckdns.org/api/... |
+| Swagger | https://tractus-devesh.duckdns.org/api/docs |
 
-1. **Create a VM** (OCI Console → Compute → Instances).
+**Quick setup**
 
-2. **Get a free subdomain** at [duckdns.org](https://www.duckdns.org) and point it at your VM **public IP**.
-
-3. **Open ingress ports** (VCN security list → Default Security List → Add Ingress Rules):
-   - `22` — SSH
-   - `80` — HTTP (Let's Encrypt)
-   - `443` — HTTPS  
-   Do **not** expose Postgres (`5433`) or app ports `3000`/`3001` (Caddy handles public traffic).
-
-4. **SSH into the VM** and install Docker:
-
-   ```bash
-   sudo apt update && sudo apt install -y git docker.io docker-compose-v2
-   sudo usermod -aG docker $USER
-   # log out and back in
-   ```
-
-5. **Clone and configure** (or run the one-shot script):
+1. Create an OCI VM (Ubuntu 22.04/24.04), open ports **22**, **80**, **443**.
+2. Point a [DuckDNS](https://www.duckdns.org) subdomain at the VM public IP.
+3. Clone, configure, deploy:
 
    ```bash
    git clone https://github.com/deveshmaurya1996/TractUs.git Tract-Us
    cd Tract-Us
    cp .env.production.example .env
-   ```
-
-   Edit `.env` — set your DuckDNS name (all four values must match):
-
-   ```env
-   DOMAIN=tractus-devesh.duckdns.org
-   NEXT_PUBLIC_API_URL=https://tractus-devesh.duckdns.org/api
-   NEXT_PUBLIC_SOCKET_URL=https://tractus-devesh.duckdns.org
-   API_PUBLIC_URL=https://tractus-devesh.duckdns.org
-   ```
-
-   **Quick deploy** (swap + Docker + compose):
-
-   ```bash
+   # Edit DOMAIN, NEXT_PUBLIC_API_URL, NEXT_PUBLIC_SOCKET_URL, API_PUBLIC_URL
    bash scripts/deploy-vm.sh
    ```
 
-6. **Build and start** (includes Caddy for HTTPS):
+   Or manually:
 
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml up --build -d
    ```
 
-   First start runs `db:push` and `db:seed` automatically (seed only if the DB is empty/partial). Caddy requests a Let's Encrypt certificate on first visit (may take 1–2 minutes after ports 80/443 are open).
+On **1 GB RAM** VMs, add swap before building (`scripts/deploy-vm.sh` does this). Rebuilds can take **30–90 minutes**.
 
-7. **Verify:** open https://tractus-devesh.duckdns.org, select **Acme Corp** or **Globex Inc**. Swagger: https://tractus-devesh.duckdns.org/api/docs.
-
-**Useful commands on the VM:**
+**Verify deployment**
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml logs -f caddy
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml logs -f api
+curl https://tractus-devesh.duckdns.org/api/health
+# {"status":"ok"}
+```
+
+On the VM:
+
+```bash
+cd ~/Tract-Us && git log -1 --oneline
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml ps
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.domain.yml exec api pnpm db:seed:force
 ```
 
-#### Auto-deploy on push to `master`
+### CI/CD
 
-After CI passes, GitHub Actions SSHs into the VM, runs `git pull`, and rebuilds Docker (`/.github/workflows/deploy.yml`).
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| **CI** | Push/PR to `main`/`master` | Install → test → lint → build |
+| **Deploy** | After CI succeeds on `master` (or manual) | SSH to VM → `git pull` → `docker compose up --build` → health check |
 
-**One-time setup** — add these [repository secrets](https://github.com/deveshmaurya1996/TractUs/settings/secrets/actions):
+A green **CI** build alone does not update production — confirm the **Deploy** workflow also succeeded.
 
-| Secret | Value |
-|--------|-------|
-| `OCI_HOST` | `161.118.180.183` |
-| `OCI_USER` | `ubuntu` |
-| `OCI_SSH_PRIVATE_KEY` | Contents of your `ssh-key-2026-06-25.key` file |
-
-From your machine (with [GitHub CLI](https://cli.github.com/) logged in):
-
-```bash
-gh secret set OCI_HOST --body "161.118.180.183" --repo deveshmaurya1996/TractUs
-gh secret set OCI_USER --body "ubuntu" --repo deveshmaurya1996/TractUs
-gh secret set OCI_SSH_PRIVATE_KEY --repo deveshmaurya1996/TractUs < "C:\Users\deves\Downloads\ssh-key-2026-06-25.key"
-```
-
-**Flow:** push to `master` → CI runs tests/lint/build → if green, Deploy workflow runs → production updates at https://tractus-devesh.duckdns.org
-
-Rebuilds on the 1 GB VM can take **30–90 minutes**. You can also trigger a deploy manually: GitHub → **Actions** → **Deploy** → **Run workflow**.
-
-**Manual redeploy on the VM** (without GitHub Actions):
+**Manual redeploy on the VM:**
 
 ```bash
 bash scripts/redeploy-vm.sh
 ```
 
-#### IP-only fallback (no DuckDNS)
-
-Open ports `22`, `3000`, `3001` on OCI. In `.env`:
-
-```env
-NEXT_PUBLIC_API_URL=http://YOUR_PUBLIC_IP:3001/api
-NEXT_PUBLIC_SOCKET_URL=http://YOUR_PUBLIC_IP:3001
-```
+### IP-only fallback (no HTTPS)
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
 
-- App: `http://<PUBLIC_IP>:3000`
-- Swagger: `http://<PUBLIC_IP>:3001/api/docs`
+Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SOCKET_URL` to `http://<PUBLIC_IP>:3001` (and API URL with `/api` suffix for the web build args).
 
-**Notes:**
-- Uses **PostgreSQL in Docker**, not Oracle Database — no Prisma changes needed.
-- PDF uploads persist in the `uploads_data` Docker volume.
-- Set an OCI **billing alert** and **stop/delete** the VM when finished to stay on free tier.
-
-### Other clouds (AWS / Azure / GCP)
-
-Same pattern: small VM + Docker Compose (+ `docker-compose.domain.yml` for a single HTTPS URL), or split API (VM/container) + managed Postgres. Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SOCKET_URL` to your public API URL at **web build time**.
-
-## Project Structure
-
-```
-├── apps/
-│   ├── api/          # Express REST API + Socket.io + Prisma
-│   └── web/          # Next.js frontend
-├── packages/
-│   ├── types/        # Shared TypeScript types
-│   ├── validation/   # Zod schemas
-│   ├── ui/           # Shared UI components
-│   └── utils/        # Shared utilities (date-fns, API URLs)
-├── docker-compose.yml
-└── turbo.json
-```
-
-## Required Contract JSON Schema
+## Required contract JSON schema
 
 ```json
 {
@@ -371,8 +453,23 @@ Same pattern: small VM + Docker Compose (+ `docker-compose.domain.yml` for a sin
       "quantity_unit": "string (optional)",
       "unit_price": "number >= 0 (required)",
       "pricing_unit": "string (optional)",
-      "total": "number (optional)"
+      "total": "number (optional, auto-calculated if omitted)"
     }
   ]
 }
 ```
+
+**Bulk create:** pass a JSON **array** of objects matching this schema.
+
+## Future improvements
+
+- Authentication and role-based access (admin vs viewer)
+- Prisma migrations instead of `db push` for production schema versioning
+- Socket.io rooms per organization for tighter broadcast scoping
+- Debounced server-side search input
+- Skeleton loaders and richer fetch-error states on the web app
+- E2E tests (Playwright) for the two-tab real-time reviewer flow
+
+## License
+
+Built as a take-home assignment project.

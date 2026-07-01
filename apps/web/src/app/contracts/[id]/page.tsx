@@ -24,10 +24,11 @@ import {
 } from "@mui/material";
 import Grid from "@mui/material/Grid2";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
-import { StatusChip, LoadingOverlay } from "@tractus/ui";
+import { ConfirmDialog, StatusChip, LoadingOverlay } from "@tractus/ui";
 import { formatDateTime, getNextStatus, getStatusActionColor, getStatusActionLabel } from "@tractus/utils";
 import type { AuditEvent, ContractFieldData } from "@tractus/types";
 import { calculateItemTotal, ContractFieldDataSchema } from "@tractus/validation";
@@ -44,6 +45,7 @@ import {
   useUpdateContract,
   useUpdateContractStatus,
   useUploadContractPdf,
+  useDeleteContract,
   useContractSocket,
 } from "../../../hooks";
 import { getContractPdfUrl } from "../../../lib/contracts-api";
@@ -68,6 +70,7 @@ export default function ContractDetail() {
   const router = useRouter();
   const { organizationId, organizationsLoading } = useSelectedOrganization();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -105,6 +108,19 @@ export default function ContractDetail() {
   const pdfMutation = useUploadContractPdf(id, organizationId, {
     onSuccess: () => showSnackbar("PDF uploaded successfully!", "success"),
     onError: () => showSnackbar("Failed to upload PDF", "error"),
+  });
+
+  const deleteMutation = useDeleteContract({
+    onSuccess: () => {
+      setDeleteDialogOpen(false);
+      showSnackbar("Contract deleted successfully!", "success");
+      router.push("/");
+    },
+    onError: (error) => {
+      const message =
+        error instanceof Error ? error.message : "Failed to delete contract";
+      showSnackbar(message, "error");
+    },
   });
 
   const contract = contractData?.data;
@@ -188,18 +204,29 @@ export default function ContractDetail() {
               </Box>
             </Box>
 
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
               {contract.status === "DRAFT" && (
-                <Button
-                  variant="outlined"
-                  startIcon={<EditOutlinedIcon />}
-                  onClick={() => {
-                    reset({ fieldData: contract.fieldData });
-                    setEditDialogOpen(true);
-                  }}
-                >
-                  Edit
-                </Button>
+                <>
+                  <Button
+                    variant="outlined"
+                    startIcon={<EditOutlinedIcon />}
+                    onClick={() => {
+                      reset({ fieldData: contract.fieldData });
+                      setEditDialogOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteOutlineIcon />}
+                    onClick={() => setDeleteDialogOpen(true)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    Delete
+                  </Button>
+                </>
               )}
               {nextStatus && (
                 <Button
@@ -418,6 +445,17 @@ export default function ContractDetail() {
         formControl={control}
         formErrors={errors}
         formSetValue={setValue}
+      />
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Delete Contract"
+        description="Are you sure you want to delete this contract? This action cannot be undone."
+        onConfirm={() =>
+          organizationId &&
+          deleteMutation.mutate({ id, organizationId })
+        }
+        onCancel={() => setDeleteDialogOpen(false)}
       />
 
       <Snackbar

@@ -96,10 +96,23 @@ export function useDeleteContract(callbacks?: MutationCallbacks) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, organizationId }: { id: string; organizationId: string }) =>
-      deleteContract(id, organizationId),
-    onSuccess: () => {
+    mutationFn: async ({
+      id,
+      organizationId,
+    }: {
+      id: string;
+      organizationId: string;
+    }) => {
+      const result = await deleteContract(id, organizationId);
+      if (!result.success) {
+        throw new Error(result.message || "Failed to delete contract");
+      }
+      return result;
+    },
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.removeQueries({ queryKey: ["contract", variables.id] });
+      queryClient.removeQueries({ queryKey: ["events", variables.id] });
       callbacks?.onSuccess?.();
     },
     onError: (error) => {
