@@ -40,8 +40,7 @@ function makeContract(fieldData: ContractFieldData, overrides: Partial<Contract>
 
 function makeEvent(
   eventType: string,
-  metadata: Record<string, unknown>,
-  id = "event-1"
+  metadata: Record<string, unknown>
 ): Pick<AuditEvent, "eventType" | "metadata"> {
   return { eventType, metadata };
 }
