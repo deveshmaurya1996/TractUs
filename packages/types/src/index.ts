@@ -71,6 +71,10 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+export interface CreateOrganizationRequest {
+  name: string;
+}
+
 export interface CreateContractRequest {
   organizationId: string;
   fieldData: ContractFieldData;

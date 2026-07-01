@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Typography,
@@ -28,7 +28,6 @@ import {
 } from "@mui/x-data-grid";
 import { StatusChip, EmptyState, LoadingOverlay, ConfirmDialog } from "@tractus/ui";
 import { formatDate, getNextStatus } from "@tractus/utils";
-import { useOrganization } from "./providers";
 import type { Contract } from "@tractus/types";
 import { calculateItemTotal, ContractFieldDataSchema } from "@tractus/validation";
 import { useForm } from "react-hook-form";
@@ -41,13 +40,14 @@ import SearchIcon from "@mui/icons-material/Search";
 import type { ContractFieldData } from "@tractus/types";
 import { CreateContractDialog } from "../components/CreateContractDialog";
 import { dataGridSx } from "../theme/theme";
+import { withOrganizationId } from "../lib/org-url";
 import {
-  useOrganizations,
   useContracts,
   useCreateContract,
   useDeleteContract,
   useUpdateContractStatus,
   useContractsSocket,
+  useSelectedOrganization,
 } from "../hooks";
 
 const emptyFieldData: ContractFieldData = {
@@ -59,7 +59,11 @@ const emptyFieldData: ContractFieldData = {
 
 export default function Home() {
   const router = useRouter();
-  const { selectedOrganization, setSelectedOrganization } = useOrganization();
+  const {
+    selectedOrganization,
+    organizationId,
+    organizationsLoading,
+  } = useSelectedOrganization();
   const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({
     page: 0,
     pageSize: 10,
@@ -74,18 +78,8 @@ export default function Home() {
     severity: "success" | "error";
   }>({ open: false, message: "", severity: "success" });
 
-  const { data: orgData, isLoading: orgsLoading } = useOrganizations();
-  const organizations = orgData?.data ?? [];
-
-  useEffect(() => {
-    const orgs = orgData?.data;
-    if (!selectedOrganization && orgs && orgs.length > 0) {
-      setSelectedOrganization(orgs[0] ?? null);
-    }
-  }, [orgData, selectedOrganization, setSelectedOrganization]);
-
   const { data: contractsData, isLoading: contractsLoading } = useContracts({
-    organizationId: selectedOrganization?.id,
+    organizationId,
     paginationModel,
     search,
     statusFilter,
@@ -283,10 +277,11 @@ export default function Home() {
   ];
 
   const handleRowClick = (params: GridRowParams<Contract>) => {
-    router.push(`/contracts/${params.row.id}`);
+    if (!organizationId) return;
+    router.push(withOrganizationId(`/contracts/${params.row.id}`, organizationId));
   };
 
-  if (orgsLoading) return <LoadingOverlay />;
+  if (organizationsLoading) return <LoadingOverlay />;
 
   const contracts = contractsData?.data?.data || [];
   const total = contractsData?.data?.total || 0;
@@ -318,27 +313,7 @@ export default function Home() {
 
         <Paper sx={{ p: 2.5 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, md: 4 }}>
-              <FormControl fullWidth required>
-                <InputLabel>Organization</InputLabel>
-                <Select
-                  value={selectedOrganization?.id || ""}
-                  label="Organization"
-                  onChange={(e) => {
-                    const org = organizations.find((o) => o.id === e.target.value);
-                    setSelectedOrganization(org ?? null);
-                    setPaginationModel((prev) => ({ ...prev, page: 0 }));
-                  }}
-                >
-                  {organizations.map((org) => (
-                    <MenuItem key={org.id} value={org.id}>
-                      {org.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, md: 5 }}>
+            <Grid size={{ xs: 12, md: 8 }}>
               <TextField
                 fullWidth
                 label="Search"
@@ -358,7 +333,7 @@ export default function Home() {
                 }}
               />
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <FormControl fullWidth>
                 <InputLabel>Status</InputLabel>
                 <Select
@@ -384,7 +359,7 @@ export default function Home() {
           {!selectedOrganization ? (
             <EmptyState
               title="Select an organization"
-              description="Choose an organization above to view and manage contracts"
+              description="Choose an organization from the header to view and manage contracts"
             />
           ) : (
             <DataGrid

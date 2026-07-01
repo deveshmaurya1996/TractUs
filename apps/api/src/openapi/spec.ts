@@ -106,7 +106,7 @@ const openApiSpecBase: Omit<OpenAPIV3.Document, "servers"> = {
       "Organization-scoped contract management API. No API keys — scope requests with `organizationId` (query param or POST body). Call GET /api/organizations first to obtain organization IDs.",
   },
   tags: [
-    { name: "Organizations", description: "Organization listing" },
+    { name: "Organizations", description: "Organization listing and creation" },
     { name: "Contracts", description: "Contract CRUD, status workflow, PDF, audit" },
   ],
   paths: {
@@ -137,6 +137,41 @@ const openApiSpecBase: Omit<OpenAPIV3.Document, "servers"> = {
               },
             },
           },
+          "500": error500,
+        },
+      },
+      post: {
+        tags: ["Organizations"],
+        summary: "Create organization",
+        operationId: "createOrganization",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/CreateOrganizationRequest" },
+            },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Organization created",
+            content: {
+              "application/json": {
+                schema: {
+                  allOf: [
+                    { $ref: "#/components/schemas/ApiSuccessResponse" },
+                    {
+                      type: "object",
+                      properties: {
+                        data: { $ref: "#/components/schemas/Organization" },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          "400": error400,
           "500": error500,
         },
       },
@@ -524,6 +559,13 @@ const openApiSpecBase: Omit<OpenAPIV3.Document, "servers"> = {
           name: { type: "string" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      CreateOrganizationRequest: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", minLength: 1 },
         },
       },
       Contract: {

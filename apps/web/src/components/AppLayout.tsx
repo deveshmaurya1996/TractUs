@@ -3,17 +3,15 @@
 import {
   AppBar,
   Box,
-  Chip,
   Container,
   Toolbar,
   Typography,
 } from "@mui/material";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
-import { useOrganization } from "../app/providers";
+import { OrganizationSwitcher } from "./OrganizationSwitcher";
 import { usePathname, useRouter } from "next/navigation";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
-  const { selectedOrganization } = useOrganization();
   const pathname = usePathname();
   const router = useRouter();
   const isDetail = pathname.startsWith("/contracts/");
@@ -57,15 +55,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <Box sx={{ flexGrow: 1 }} />
 
-          {selectedOrganization && (
-            <Chip
-              label={selectedOrganization.name}
-              size="small"
-              color="primary"
-              variant="outlined"
-              sx={{ fontWeight: 600 }}
-            />
-          )}
+          <OrganizationSwitcher />
 
           {isDetail && (
             <Typography

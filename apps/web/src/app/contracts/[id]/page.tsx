@@ -41,7 +41,8 @@ import { z } from "zod";
 import { ContractFieldForm } from "../../../components/ContractFieldForm";
 import { AuditJsonBlock } from "../../../components/AuditJsonBlock";
 import { DetailField } from "../../../components/DetailField";
-import { useOrganization } from "../../providers";
+import { useSelectedOrganization } from "../../../hooks";
+import { homeWithOrganization } from "../../../lib/org-url";
 import {
   useContract,
   useAuditEvents,
@@ -70,8 +71,7 @@ const EVENT_LABELS: Record<string, string> = {
 export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { selectedOrganization } = useOrganization();
-  const organizationId = selectedOrganization?.id;
+  const { organizationId } = useSelectedOrganization();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -142,7 +142,7 @@ export default function ContractDetail() {
     return (
       <Paper sx={{ p: 4, textAlign: "center" }}>
         <Typography gutterBottom>Contract not found</Typography>
-        <Button onClick={() => router.push("/")} variant="outlined" sx={{ mt: 2 }}>
+        <Button onClick={() => router.push(homeWithOrganization(organizationId))} variant="outlined" sx={{ mt: 2 }}>
           Back to Contracts
         </Button>
       </Paper>
@@ -161,7 +161,7 @@ export default function ContractDetail() {
               variant="body2"
               underline="hover"
               color="inherit"
-              onClick={() => router.push("/")}
+              onClick={() => router.push(homeWithOrganization(organizationId))}
             >
               Contracts
             </Link>
@@ -177,7 +177,7 @@ export default function ContractDetail() {
             spacing={2}
           >
             <Box display="flex" alignItems="center" gap={2}>
-              <IconButton onClick={() => router.push("/")} size="small" sx={{ border: 1, borderColor: "divider" }}>
+              <IconButton onClick={() => router.push(homeWithOrganization(organizationId))} size="small" sx={{ border: 1, borderColor: "divider" }}>
                 <ArrowBackIcon fontSize="small" />
               </IconButton>
               <Box>

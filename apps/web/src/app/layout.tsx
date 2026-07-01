@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Inter } from "next/font/google";
+import { LoadingOverlay } from "@tractus/ui";
 import { Providers } from "./providers";
 
 const inter = Inter({
@@ -21,7 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body>
-        <Providers>{children}</Providers>
+        <Suspense fallback={<LoadingOverlay />}>
+          <Providers>{children}</Providers>
+        </Suspense>
       </body>
     </html>
   );
